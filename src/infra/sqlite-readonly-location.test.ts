@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -13,6 +14,7 @@ import { readMainDatabasePosixLocks } from "./sqlite-posix-locks.test-support.js
 import {
   prepareSqliteReadOnlyLocationInProcess,
   prepareSqliteReadOnlyLocationSyncInProcess,
+  SqliteSourceChangedError,
 } from "./sqlite-readonly-location.js";
 import {
   prepareSqliteReadOnlyLocation,
@@ -578,7 +580,10 @@ describe("prepareSqliteReadOnlyLocation", () => {
     );
   });
 
-  it("names retry count and guidance when async source does not stabilize", async () => {
+  it.each([
+    { mode: "async", prepare: prepareSqliteReadOnlyLocationInProcess },
+    { mode: "sync", prepare: prepareSqliteReadOnlyLocationSyncInProcess },
+  ])("names retry count and guidance when $mode source does not stabilize", async ({ prepare }) => {
     const databasePath = createTempDatabasePath();
     const sqlite = requireNodeSqlite();
     const database = new sqlite.DatabaseSync(databasePath);
@@ -588,50 +593,31 @@ describe("prepareSqliteReadOnlyLocation", () => {
     database.close();
     const canonicalPath = fs.realpathSync.native(databasePath);
     const openSync = fs.openSync.bind(fs);
-    vi.spyOn(fs, "openSync").mockImplementation(((pathname: fs.PathLike, flags: fs.OpenMode) => {
+    vi.spyOn(fs, "openSync").mockImplementation((pathname, flags, mode) => {
       if (path.resolve(String(pathname)) === canonicalPath) {
-        const error = new Error("simulated source disappearance");
-        (error as NodeJS.ErrnoException).code = "ENOENT";
-        throw error;
+        throw Object.assign(new Error("simulated source disappearance"), { code: "ENOENT" });
       }
-      return openSync(pathname, flags);
-    }) as typeof fs.openSync);
-    await expect(prepareSqliteReadOnlyLocationInProcess(databasePath)).rejects.toThrow(
-      /did not stabilize after \d+ read-only inspection attempts/u,
-    );
-    await expect(prepareSqliteReadOnlyLocationInProcess(databasePath)).rejects.toThrow(
-      /Wait a moment for write activity to settle/u,
-    );
-    await expect(prepareSqliteReadOnlyLocationInProcess(databasePath)).rejects.toThrow(
-      canonicalPath,
-    );
-  });
+      return openSync(pathname, flags, mode);
+    });
 
-  it("names retry count and guidance when sync source does not stabilize", () => {
-    const databasePath = createTempDatabasePath();
-    const sqlite = requireNodeSqlite();
-    const database = new sqlite.DatabaseSync(databasePath);
-    database.exec(
-      "PRAGMA journal_mode = WAL; CREATE TABLE probe (value TEXT); INSERT INTO probe VALUES ('ok');",
-    );
-    database.close();
-    const canonicalPath = fs.realpathSync.native(databasePath);
-    const openSync = fs.openSync.bind(fs);
-    vi.spyOn(fs, "openSync").mockImplementation(((pathname: fs.PathLike, flags: fs.OpenMode) => {
-      if (path.resolve(String(pathname)) === canonicalPath) {
-        const error = new Error("simulated source disappearance");
-        (error as NodeJS.ErrnoException).code = "ENOENT";
-        throw error;
-      }
-      return openSync(pathname, flags);
-    }) as typeof fs.openSync);
-    expect(() => prepareSqliteReadOnlyLocationSyncInProcess(databasePath)).toThrow(
-      /did not stabilize after \d+ read-only inspection attempts/u,
-    );
-    expect(() => prepareSqliteReadOnlyLocationSyncInProcess(databasePath)).toThrow(
-      /Wait a moment for write activity to settle/u,
-    );
-    expect(() => prepareSqliteReadOnlyLocationSyncInProcess(databasePath)).toThrow(canonicalPath);
+    let error: unknown;
+    try {
+      await prepare(databasePath);
+    } catch (caught) {
+      error = caught;
+    }
+    assert(error instanceof Error);
+    expect.soft(error.message).toContain("after 10 read-only inspection attempts");
+    expect.soft(error.message).toContain("the database may be under concurrent write activity");
+    expect
+      .soft(error.message)
+      .toContain("Wait a moment for write activity to settle, then retry the inspection");
+    expect.soft(error.message).toContain(canonicalPath);
+    expect.soft(error.cause).toBeInstanceOf(SqliteSourceChangedError);
+    expect.soft(error.cause).toMatchObject({
+      message: `SQLite source disappeared: ${canonicalPath}`,
+    });
+    expect.soft(error.message).not.toContain("SQLite source disappeared");
   });
 
   it.runIf(process.platform === "linux")(
