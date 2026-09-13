@@ -136,8 +136,9 @@ suite.define(() => {
         updateComplete: Promise<unknown>;
       };
       const scene = actor.geometry.scene;
-      if (!scene.floor || !scene.passage)
+      if (!scene.floor || !scene.passage) {
         throw new Error("Default composer has no safe floor or passage");
+      }
       actor.spotPct =
         (((scene.passage[0] + scene.passage[1]) / 2 - scene.top.start) /
           (scene.top.end - scene.top.start)) *
@@ -173,7 +174,9 @@ suite.define(() => {
     "keeps %s visits in the new composer",
     async (kind) => {
       let seed = 0;
-      while (planLobsterPasser(seed)?.kind !== kind && seed < 10000) seed++;
+      while (planLobsterPasser(seed)?.kind !== kind && seed < 10000) {
+        seed++;
+      }
       const plan = planLobsterPasser(seed)!;
       expect(plan.kind).toBe(kind);
       await configureComposerPet({ mode: "idle", outcome: "ok", seed });

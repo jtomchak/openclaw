@@ -87,19 +87,6 @@ async function setThemeMode(page: Page, mode: "dark" | "light") {
   await expect.poll(() => page.locator("html").getAttribute("data-theme-mode")).toBe(mode);
 }
 
-async function openSidebarTestPage() {
-  const context = await suite.browser.newContext({
-    locale: "en-US",
-    serviceWorkers: "block",
-    viewport: { height: 900, width: 1440 },
-  });
-  const page = await context.newPage();
-  await installMockGateway(page);
-  await page.goto(`${suite.server.baseUrl}chat`);
-  await page.locator("openclaw-app-sidebar").waitFor();
-  return { context, page };
-}
-
 suite.define(() => {
   it("uses catalog labels in the hidden-section recovery rows", async () => {
     const context = await suite.browser.newContext({

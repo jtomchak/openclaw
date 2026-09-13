@@ -289,21 +289,16 @@ export function renderNewSessionDraftComposer(options: {
     options.draftOwnerKey,
   );
   return renderNewSessionComposer({
-    critters: {
-      seed: lobsterPetSeed(`${options.textareaController.critterVisit}:${options.draftOwnerKey}`),
-      mode: resolveLobsterPetMode(
-        !gateway?.snapshot.offlineStable,
-        options.context?.sessions.state.result?.sessions,
-      ),
-      runOutcome: resolveLobsterRunOutcome(options.context?.sessions.state.result?.sessions),
-      visitsEnabled: options.context?.theme.settings.lobsterPetVisits !== false,
-      soundsEnabled: options.context?.theme.settings.lobsterPetSounds === true,
-      gatewayVersion:
-        options.context?.config.current.serverVersion ??
-        gateway?.snapshot.hello?.server?.version ??
-        null,
-      onVisitsDisabled: () => options.context?.theme.refresh(),
-    },
+    renderCritters: (floorEnabled) => html`<openclaw-lobster-pet
+      .seed=${lobsterPetSeed(`${options.textareaController.critterVisit}:${options.draftOwnerKey}`)}
+      .mode=${resolveLobsterPetMode(!gateway?.snapshot.offlineStable, options.context?.sessions.state.result?.sessions)}
+      .runOutcome=${resolveLobsterRunOutcome(options.context?.sessions.state.result?.sessions)}
+      .visitsEnabled=${options.context?.theme.settings.lobsterPetVisits !== false}
+      .soundsEnabled=${options.context?.theme.settings.lobsterPetSounds === true}
+      .gatewayVersion=${options.context?.config.current.serverVersion ?? gateway?.snapshot.hello?.server?.version ?? null}
+      .onVisitsDisabled=${() => options.context?.theme.refresh()}
+      .floorEnabled=${floorEnabled}
+    ></openclaw-lobster-pet>`,
     attachmentLimits: options.context?.gateway.snapshot.hello?.policy?.attachments,
     attachments: options.attachmentDraft.attachments,
     canSubmit: options.canSubmit,

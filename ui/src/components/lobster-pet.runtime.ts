@@ -4,7 +4,6 @@
 // Drawn in the smooth OpenClaw lobster style (see the dreams scene and
 // icons.lobster). Look and personality are seeded per session + page load so
 // every new session hatches a slightly different lobster.
-import { expectDefined } from "@openclaw/normalization-core";
 import { LitElement, nothing, type PropertyValues } from "lit";
 import { property, state } from "lit/decorators.js";
 import { isLobsterDay } from "../../../src/shared/lobster-day.js";
@@ -18,11 +17,12 @@ import {
 } from "./lobster-pet-dismiss-menu.ts";
 import * as lobsterLook from "./lobster-pet-look.ts";
 import * as plans from "./lobster-pet-plans.ts";
+import { renderLobsterPetScene } from "./lobster-pet-scene-view.ts";
 import {
   LobsterComposerGeometry,
-  lobsterLanePoint,
   lobsterTravelDuration,
   type LobsterSceneTravel,
+  type LobsterSceneMove,
 } from "./lobster-pet-scene.ts";
 import { LobsterLedgeTraffic } from "./lobster-pet-traffic.ts";
 
@@ -595,10 +595,6 @@ class LobsterPet extends LitElement {
     this.facing = this.visitRng() < 0.5 ? 1 : -1;
   }
 
-  private currentZone(): readonly [number, number] {
-    return [0, 100];
-  }
-
   private scheduleNextAct() {
     // Guard here, not just at activation: the visibilitychange resume path
     // must also stay inert for reduced-motion users and departed pets.
@@ -682,27 +678,18 @@ class LobsterPet extends LitElement {
   private completeMolt() {
     this.molted = true;
     if (this.look) {
-      const tiers = [1.7, 2, 2.5];
-      const index = tiers.indexOf(this.look.scale);
       // The shed shell keeps the true pre-molt size; a max-tier pet sheds a
       // max-tier shell.
       this.shellScale = this.look.scale;
       this.look = {
         ...this.look,
-        scale: expectDefined(
-          tiers[Math.min(index + 1, tiers.length - 1)],
-          "lobster molt size tier",
-        ),
+        scale: this.look.scale < 2 ? 2 : 2.5,
       };
     }
     this.shellSpotPct = this.spotPct;
     this.shellAnchor = this.anchor;
     this.shellVisible = true;
-    const zone = this.currentZone();
-    this.spotPct = Math.min(
-      zone[1],
-      Math.max(zone[0], this.spotPct + (this.facing === 1 ? 9 : -9)),
-    );
+    this.spotPct = Math.min(100, Math.max(0, this.spotPct + this.facing * 9));
     if (this.shellTimer !== null) {
       window.clearTimeout(this.shellTimer);
     }
@@ -712,63 +699,30 @@ class LobsterPet extends LitElement {
     }, 60_000);
   }
 
-  private startScuttle() {
-    if (!this.look) {
+  private applyMove(move: LobsterSceneMove | null) {
+    if (!move) {
       return;
     }
-    const zone = this.currentZone();
-    let target = Math.round(lobsterLook.randomBetween(this.rng, zone[0], zone[1]));
-    // A same-spot walk reads as a glitch; nudge to the other zone edge.
-    if (Math.abs(target - this.spotPct) < 4) {
-      target =
-        Math.abs(zone[0] - this.spotPct) > Math.abs(zone[1] - this.spotPct) ? zone[0] : zone[1];
-    }
-    this.facing = target < this.spotPct ? -1 : 1;
-    const lane = this.geometry.scene[this.anchor];
-    this.travel = {
-      from: lobsterLanePoint(lane, this.spotPct),
-      to: lobsterLanePoint(lane, target),
-      hop: false,
-    };
+    this.anchor = move.anchor;
+    this.spotPct = move.spotPct;
+    this.facing = move.facing;
+    this.travel = move.travel;
     this.travelScene = this.geometry.scene;
-    this.spotPct = target;
+  }
+
+  private startScuttle() {
+    this.applyMove(this.geometry.planWalk(this.anchor, this.spotPct, this.rng()));
   }
 
   private startFloorHop() {
-    const scene = this.geometry.scene;
-    const passage = scene.passage;
     if (
       !this.floorEnabled ||
-      !scene.floor ||
-      !passage ||
       this.identity?.elder ||
       (this.anchor === "top" && this.motionRng() >= 0.45)
     ) {
       return;
     }
-    const from = lobsterLanePoint(scene[this.anchor], this.spotPct);
-    // Walk over to the clear column first. A diagonal through the placeholder
-    // would be shorter, but it would not be a safe route.
-    if (from.x < passage[0] || from.x > passage[1]) {
-      const lane = scene[this.anchor];
-      if (lane && lane.end > lane.start) {
-        const target =
-          (((passage[0] + passage[1]) / 2 - lane.start) / (lane.end - lane.start)) * 100;
-        this.travel = { from, to: lobsterLanePoint(lane, target), hop: false };
-        this.spotPct = target;
-      }
-    } else {
-      this.anchor = this.anchor === "top" ? "floor" : "top";
-      const lane = scene[this.anchor];
-      if (!lane) {
-        return;
-      }
-      const x = from.x < (passage[0] + passage[1]) / 2 ? passage[1] : passage[0];
-      this.facing = x < from.x ? -1 : 1;
-      this.spotPct = ((x - lane.start) / (lane.end - lane.start)) * 100;
-      this.travel = { from, to: { x, y: lane.y }, hop: true };
-    }
-    this.travelScene = scene;
+    this.applyMove(this.geometry.planHop(this.anchor, this.spotPct));
   }
 
   override render() {
@@ -782,7 +736,7 @@ class LobsterPet extends LitElement {
       : identity?.oldFriend
         ? "an old friend"
         : null;
-    const scene = lobsterLook.renderLobsterPetScene({
+    const scene = renderLobsterPetScene({
       look,
       mode: this.mode,
       presence: this.presence,

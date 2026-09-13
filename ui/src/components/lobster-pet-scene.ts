@@ -12,6 +12,13 @@ export function lobsterTravelDuration(travel: LobsterSceneTravel): number {
     ? 1100
     : Math.max(850, Math.min(2600, Math.abs(travel.to.x - travel.from.x) * 8));
 }
+export type LobsterSceneMove = {
+  anchor: "top" | "floor";
+  spotPct: number;
+  facing: 1 | -1;
+  travel: LobsterSceneTravel;
+};
+
 export type LobsterComposerScene = {
   top: LobsterSceneLane | null;
   floor: LobsterSceneLane | null;
@@ -25,7 +32,7 @@ const HEADROOM = 88; // Includes top-lane hops and balloon entrances.
 function widestGap(start: number, end: number, obstacles: readonly Box[], padding: number) {
   let cursor = start;
   let best: [number, number] | null = null;
-  for (const box of [...obstacles].sort((a, b) => a.left - b.left)) {
+  for (const box of obstacles.toSorted((a, b) => a.left - b.left)) {
     const stop = Math.min(end, box.left - padding);
     if (stop > cursor && (!best || stop - cursor > best[1] - best[0])) {
       best = [cursor, stop];
@@ -122,6 +129,59 @@ export class LobsterComposerGeometry implements ReactiveController {
     private readonly twins: () => boolean,
   ) {
     host.addController(this);
+  }
+
+  planWalk(anchor: "top" | "floor", spotPct: number, roll: number): LobsterSceneMove | null {
+    const lane = this.scene[anchor];
+    if (!lane) {
+      return null;
+    }
+    let target = Math.round(roll * 100);
+    // A same-spot walk reads as a glitch; use the farther edge instead.
+    if (Math.abs(target - spotPct) < 4) {
+      target = spotPct > 50 ? 0 : 100;
+    }
+    return {
+      anchor,
+      spotPct: target,
+      facing: target < spotPct ? -1 : 1,
+      travel: {
+        from: lobsterLanePoint(lane, spotPct),
+        to: lobsterLanePoint(lane, target),
+        hop: false,
+      },
+    };
+  }
+
+  planHop(anchor: "top" | "floor", spotPct: number): LobsterSceneMove | null {
+    const { passage, floor } = this.scene;
+    const lane = this.scene[anchor];
+    if (!passage || !floor || !lane) {
+      return null;
+    }
+    const from = lobsterLanePoint(lane, spotPct);
+    const middle = (passage[0] + passage[1]) / 2;
+    // Walk to the clear column before hopping, rather than cutting through text.
+    if (from.x < passage[0] || from.x > passage[1]) {
+      return {
+        anchor,
+        spotPct: ((middle - lane.start) / (lane.end - lane.start)) * 100,
+        facing: middle < from.x ? -1 : 1,
+        travel: { from, to: { x: middle, y: lane.y }, hop: false },
+      };
+    }
+    const next = anchor === "top" ? "floor" : "top";
+    const destination = this.scene[next];
+    if (!destination) {
+      return null;
+    }
+    const x = from.x < middle ? passage[1] : passage[0];
+    return {
+      anchor: next,
+      spotPct: ((x - destination.start) / (destination.end - destination.start)) * 100,
+      facing: x < from.x ? -1 : 1,
+      travel: { from, to: { x, y: destination.y }, hop: true },
+    };
   }
 
   hostConnected() {
