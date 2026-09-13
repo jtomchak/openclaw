@@ -1398,16 +1398,20 @@ async function buildResponsesPayload(
     // replay the historical spawn before that fallback runs.
     return buildAssistantEvents("NO_REPLY");
   }
-  const terminalWorkerCase = Array.from(
-    allInputText.matchAll(
-      new RegExp(
-        QA_SUBAGENT_TERMINAL_MATRIX_WORKER_RE.source,
-        `${QA_SUBAGENT_TERMINAL_MATRIX_WORKER_RE.flags.replaceAll("g", "")}g`,
-      ),
-    ),
-  )
-    .at(-1)?.[1]
-    ?.toLowerCase();
+  // The current parent request outranks worker text in its history. Otherwise
+  // retain the worker context needed by ordinary and projected retry turns.
+  const terminalWorkerCase = QA_SUBAGENT_TERMINAL_MATRIX_PROMPT_RE.test(currentPrompt)
+    ? undefined
+    : Array.from(
+        allInputText.matchAll(
+          new RegExp(
+            QA_SUBAGENT_TERMINAL_MATRIX_WORKER_RE.source,
+            `${QA_SUBAGENT_TERMINAL_MATRIX_WORKER_RE.flags.replaceAll("g", "")}g`,
+          ),
+        ),
+      )
+        .at(-1)?.[1]
+        ?.toLowerCase();
   if (terminalWorkerCase) {
     const childSessionKey = resolveQaChildSessionKey(input, body);
     if (options.waitForTerminalRequesterSettled && childSessionKey) {

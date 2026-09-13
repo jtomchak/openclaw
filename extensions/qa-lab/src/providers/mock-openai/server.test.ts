@@ -3499,6 +3499,22 @@ Update and merge these partial structured summaries.`,
     expect(outputText(payload)).not.toContain("Protocol note:");
   });
 
+  it("keeps the projected empty worker active across a continuation", async () => {
+    const server = await startMockServer();
+    const payload = await expectNonStreamingResponsesJson(server, {
+      tools: [{ type: "function", name: "write" }],
+      input: [
+        makeUserInput(
+          "<conversation_context>\n[user]\nSubagent terminal reply QA worker: empty.\n</conversation_context>\n\nCurrent user request:\nContinue.",
+        ),
+      ],
+    });
+    expect(outputToolArgsFromItem(outputToolCall(payload, "write"))).toEqual({
+      path: "qa-terminal-empty-side-effect.txt",
+      content: "empty terminal QA side effect completed\n",
+    });
+  });
+
   it("makes the empty terminal worker terminal after one side effect", async () => {
     const server = await startMockServer();
     await expectNonStreamingResponsesJson(server, {
@@ -3772,6 +3788,33 @@ Update and merge these partial structured summaries.`,
       "qa-terminal-silent",
     );
   });
+
+  it.each(["messages", "projected"])(
+    "does not replay a historical terminal worker for a new parent in %s input",
+    async (shape) => {
+      const server = await startMockServer();
+      const historicalWorker = "Subagent terminal reply QA worker: visible.";
+      const currentParent = "Subagent terminal reply QA check: silent.";
+      const input =
+        shape === "messages"
+          ? [makeUserInput(historicalWorker), makeUserInput(currentParent)]
+          : [
+              makeUserInput(
+                `<conversation_context>\n[user]\n${historicalWorker}\n</conversation_context>\n\nCurrent user request:\n${currentParent}`,
+              ),
+            ];
+      const payload = await expectNonStreamingResponsesJson(server, {
+        tools: [SESSIONS_SPAWN_TOOL, SESSIONS_YIELD_TOOL],
+        input,
+      });
+      const spawn = outputToolCall(payload, "sessions_spawn");
+      expect(outputToolArgsFromItem(spawn)).toMatchObject({
+        task: "Subagent terminal reply QA worker: silent.",
+        label: "qa-terminal-silent",
+      });
+      expect(JSON.stringify(payload)).not.toContain("QA-SUBAGENT-TERMINAL-VISIBLE-OK");
+    },
+  );
 
   it("ignores a stale terminal-reply case in a later internal runtime carrier", async () => {
     const server = await startMockServer();
