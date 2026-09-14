@@ -80,7 +80,10 @@ export const UsersListResultSchema = closedObject({ profiles: Type.Array(UserPro
 export const UsersSelfParamsSchema = closedObject({});
 export const UsersSelfResultSchema = closedObject({
   profile: UserProfileSchema,
-  assignedAgentId: Type.Union([AssignedAgentIdSchema, Type.Null()]),
+  // Optional on the wire so older clients and mixed-version gateways remain compatible.
+  // Current gateways always emit the field; security-sensitive clients must fail closed
+  // when it is absent rather than inferring an assignment.
+  assignedAgentId: Type.Optional(Type.Union([AssignedAgentIdSchema, Type.Null()])),
 });
 
 export const UsersLinkEmailParamsSchema = closedObject({
