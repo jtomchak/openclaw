@@ -5,6 +5,13 @@
 - Adds richer mobile chat controls, remote desktop viewing, live subagent progress, session organization, easier agent switching, and reply notifications.
 - Improves queued-message and offline-history recovery, shared attachments, Talk playback, photo orientation, notification consent, and Gateway proxy connections.
 
+## 2026.9.41
+
+- Adds secure invitation enrollment for trusted family members through the Cloudflare relay.
+- Adds an agent-scoped family experience with Chat, Feed, Ideas, Goals, and Library destinations.
+- Adds a native Liquid Glass tab bar on iOS 26 with a material fallback for earlier supported releases.
+- Locks family chat, sessions, models, deep links, voice, and Watch replies to the Gateway-assigned agent.
+
 ## 2026.8.11
 
 - Choose one of eight session colors from existing session menus, with matching sidebar stripes and chat title dots; select Default to clear a color.
