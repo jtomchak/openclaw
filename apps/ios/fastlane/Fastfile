@@ -2035,6 +2035,8 @@ def prepare_family_product_release!(version:, app_store_revision:, build_number:
     OPENCLAW_WATCH_APP_BUNDLE_ID = #{config[:app_identifier]}.watchkitapp
     OPENCLAW_APP_GROUP_ID = #{config[:app_group]}
     OPENCLAW_APP_DISPLAY_NAME = Family
+    OPENCLAW_APP_ICON_NAME = FamilyAppIcon
+    OPENCLAW_WATCH_DISPLAY_NAME = Family
     OPENCLAW_FAMILY_PRODUCT = YES
     OPENCLAW_FAMILY_RELAY_HOST = #{config[:relay_host]}
     OPENCLAW_APP_PROFILE =

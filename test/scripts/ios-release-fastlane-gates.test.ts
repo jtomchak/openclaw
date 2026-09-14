@@ -353,6 +353,20 @@ describe("iOS Fastlane release upload gates", () => {
     expect(fastfile).not.toContain("Deprecated. Use `pnpm ios:release:upload`.");
   });
 
+  it("selects dedicated Family app and Watch icon catalogs", () => {
+    const projectSpec = readFileSync(
+      path.join(process.cwd(), "apps", "ios", "project.yml"),
+      "utf8",
+    );
+    const fastfile = readFastfile();
+
+    expect(projectSpec).toContain(
+      'ASSETCATALOG_COMPILER_APPICON_NAME: "$(OPENCLAW_APP_ICON_NAME)"',
+    );
+    expect(fastfile).toContain("OPENCLAW_APP_ICON_NAME = FamilyAppIcon");
+    expect(fastfile).toContain("OPENCLAW_WATCH_DISPLAY_NAME = Family");
+  });
+
   it("rejects direct Fastlane upload before release work", () => {
     const fastfile = readFastfile();
     const releaseUpload = laneBody(fastfile, "release_upload");
