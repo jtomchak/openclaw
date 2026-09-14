@@ -55,6 +55,8 @@ const CORE_GATEWAY_HANDLER_MODULES = {
   "exec-approvals": () =>
     import("./exec-approvals.js").then((module) => module.execApprovalsHandlers),
   fs: () => import("./fs.js").then((module) => module.fsHandlers),
+  "agent-invitations": () =>
+    import("./agent-invitations.js").then((module) => module.agentInvitationHandlers),
   health: () => import("./health.js").then((module) => module.healthHandlers),
   logs: () => import("./logs.js").then((module) => module.logsHandlers),
   "memory-search": () => import("./memory-search.js").then((module) => module.memorySearchHandlers),

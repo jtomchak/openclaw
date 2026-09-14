@@ -104,6 +104,16 @@ export function ensureDevicePairingJoinCodeSchema(database: DatabaseSync): void 
   ); // sqlite-allow-raw -- Canonical additive DDL only.
 }
 
+/** Lazily installs scoped agent invitation and device-binding state. */
+export function ensureAgentInvitationsSchema(database: DatabaseSync): void {
+  database.exec(
+    extractSqliteTableSchema(OPENCLAW_STATE_SCHEMA_SQL, "agent_invitations", {
+      endMarker: "WHERE state = 'active' AND device_id IS NOT NULL;",
+      errorMessage: "OpenClaw agent invitation schema marker is missing.",
+    }),
+  ); // sqlite-allow-raw -- Canonical lazy additive DDL; invitation rows use Kysely.
+}
+
 /** Lazily installs the Gateway's installation-local config revision key owner. */
 export function ensureConfigRevisionKeySchema(database: DatabaseSync): void {
   database.exec(
