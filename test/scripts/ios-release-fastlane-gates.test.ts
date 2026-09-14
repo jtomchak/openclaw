@@ -341,12 +341,14 @@ describe("iOS Fastlane release upload gates", () => {
     expect(script).toContain('run_ios_fastlane "${FASTLANE_ARGS[@]}"');
   });
 
-  it("keeps release_upload as the only Fastlane TestFlight upload implementation", () => {
+  it("keeps one shared Fastlane TestFlight upload implementation", () => {
     const fastfile = readFastfile();
     const uploadCalls = fastfile.match(/\bupload_to_testflight\s*\(/g) ?? [];
 
     expect(uploadCalls).toHaveLength(1);
-    expect(laneBody(fastfile, "release_upload")).toContain("upload_to_testflight(");
+    expect(fastfile).toContain("def perform_testflight_upload!");
+    expect(laneBody(fastfile, "release_upload")).toContain("perform_testflight_upload!");
+    expect(laneBody(fastfile, "family_trial_upload")).toContain("perform_testflight_upload!");
     expect(fastfile).not.toMatch(/\n\s+lane :app_store do\b/);
     expect(fastfile).not.toContain("Deprecated. Use `pnpm ios:release:upload`.");
   });
@@ -463,7 +465,7 @@ describe("iOS Fastlane release upload gates", () => {
     const build = releaseUpload.indexOf("build = build_app_store_release(context)");
     const planRecheck = releaseUpload.lastIndexOf("resolve_ios_release_plan!");
     const metadata = releaseUpload.indexOf("\n    metadata(");
-    const upload = releaseUpload.indexOf("upload_to_testflight(");
+    const upload = releaseUpload.indexOf("perform_testflight_upload!(**upload_options)");
 
     expect(fastfile).not.toContain("def verify_app_store_binary!");
     expect(releaseUpload).not.toContain("verify_only: true");
@@ -494,14 +496,14 @@ describe("iOS Fastlane release upload gates", () => {
     );
     expect(releaseUpload).not.toContain("skip_waiting_for_build_processing: true");
     expect(releaseUpload.indexOf("mobile_release_intent_context!")).toBeLessThan(
-      releaseUpload.indexOf("upload_to_testflight(**upload_options)"),
+      releaseUpload.indexOf("perform_testflight_upload!(**upload_options)"),
     );
     expect(releaseUpload.indexOf("resolve_ci_testflight_internal_group_id!")).toBeLessThan(
-      releaseUpload.indexOf("upload_to_testflight(**upload_options)"),
+      releaseUpload.indexOf("perform_testflight_upload!(**upload_options)"),
     );
     expect(
       releaseUpload.indexOf("assign_and_verify_ci_testflight_internal_group!"),
-    ).toBeGreaterThan(releaseUpload.indexOf("upload_to_testflight(**upload_options)"));
+    ).toBeGreaterThan(releaseUpload.indexOf("perform_testflight_upload!(**upload_options)"));
     expect(releaseUpload.indexOf("finalize_mobile_release_ref!")).toBeGreaterThan(
       releaseUpload.indexOf("assign_and_verify_ci_testflight_internal_group!"),
     );
