@@ -61,20 +61,20 @@ enum ConnectedFamilyAgentShellFixture {
 struct ConnectedFamilyAgentShell: View {
     @Environment(NodeAppModel.self) private var appModel
     @State private var selectedTab: ConnectedFamilyAgentTab
+    @Namespace private var tabSelectionNamespace
 
     init(arguments: [String] = ProcessInfo.processInfo.arguments) {
         _selectedTab = State(initialValue: ConnectedFamilyAgentShellFixture.initialTab(arguments: arguments))
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            self.selectedContent
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            Divider()
-            self.tabBar
-        }
-        .background(OpenClawProBackground())
-        .accessibilityIdentifier("FamilyAgent.Shell")
+        self.selectedContent
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                self.tabBar
+            }
+            .background(OpenClawProBackground())
+            .accessibilityIdentifier("FamilyAgent.Shell")
     }
 
     @ViewBuilder
@@ -148,34 +148,53 @@ struct ConnectedFamilyAgentShell: View {
     }
 
     private var tabBar: some View {
-        HStack(spacing: 2) {
-            ForEach(ConnectedFamilyAgentTab.allCases) { tab in
-                Button {
-                    self.selectedTab = tab
-                } label: {
-                    VStack(spacing: 4) {
-                        Image(systemName: tab.symbol)
-                            .font(.system(size: 17, weight: .semibold))
-                            .accessibilityHidden(true)
-                        Text(tab.title)
-                            .font(OpenClawType.caption2Medium)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.72)
-                    }
-                    .foregroundStyle(self.selectedTab == tab ? OpenClawBrand.accent : .secondary)
-                    .frame(maxWidth: .infinity, minHeight: 50)
-                    .contentShape(Rectangle())
+        OpenClawGlassControlGroup {
+            HStack(spacing: 3) {
+                ForEach(ConnectedFamilyAgentTab.allCases) { tab in
+                    self.tabButton(tab)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(tab.accessibilityLabel)
-                .accessibilityValue(self.selectedTab == tab ? "Selected" : "")
-                .accessibilityIdentifier("FamilyAgent.Tab.\(tab.rawValue.capitalized)")
+            }
+            .padding(5)
+            .modifier(FamilyAgentTabBarSurface())
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+        .padding(.bottom, 6)
+    }
+
+    private func tabButton(_ tab: ConnectedFamilyAgentTab) -> some View {
+        Button {
+            withAnimation(.snappy(duration: 0.3, extraBounce: 0.05)) {
+                self.selectedTab = tab
+            }
+        } label: {
+            VStack(spacing: 3) {
+                Image(systemName: tab.symbol)
+                    .font(.system(size: 17, weight: .semibold))
+                    .symbolEffect(.bounce, value: self.selectedTab == tab)
+                    .accessibilityHidden(true)
+                Text(tab.title)
+                    .font(OpenClawType.caption2Medium)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+            }
+            .foregroundStyle(self.selectedTab == tab ? .white : .secondary)
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .contentShape(Capsule())
+            .background {
+                if self.selectedTab == tab {
+                    Capsule()
+                        .fill(OpenClawBrand.accent.gradient)
+                        .matchedGeometryEffect(id: "FamilyAgent.Tab.Selection", in: self.tabSelectionNamespace)
+                        .shadow(color: OpenClawBrand.accent.opacity(0.24), radius: 8, y: 3)
+                }
             }
         }
-        .padding(.horizontal, 6)
-        .padding(.top, 4)
-        .safeAreaPadding(.bottom, 4)
-        .background(.bar)
+        .buttonStyle(.plain)
+        .accessibilityLabel(tab.accessibilityLabel)
+        .accessibilityValue(self.selectedTab == tab ? "Selected" : "")
+        .accessibilityAddTraits(self.selectedTab == tab ? .isSelected : [])
+        .accessibilityIdentifier("FamilyAgent.Tab.\(tab.rawValue.capitalized)")
     }
 
     private func starterSurface(
@@ -285,6 +304,23 @@ struct ConnectedFamilyAgentShell: View {
     private func openChat(prompt: String) {
         self.appModel.requestFamilyAgentChat(prompt: prompt)
         self.selectedTab = .chat
+    }
+}
+
+private struct FamilyAgentTabBarSurface: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content
+                .glassEffect(.regular.interactive(), in: .capsule)
+        } else {
+            content
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay {
+                    Capsule()
+                        .strokeBorder(.white.opacity(0.12), lineWidth: 0.5)
+                }
+                .shadow(color: .black.opacity(0.16), radius: 16, y: 7)
+        }
     }
 }
 

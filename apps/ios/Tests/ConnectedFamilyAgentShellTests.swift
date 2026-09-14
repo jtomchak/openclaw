@@ -28,6 +28,19 @@ struct ConnectedFamilyAgentShellTests {
         #expect(!source.contains("AgentProTab("))
     }
 
+    @Test func `family shell uses a floating liquid glass tab bar with a material fallback`() throws {
+        let source = try Self.source("Sources/ConnectedFamilyAgentShell.swift")
+
+        #expect(source.contains(".safeAreaInset(edge: .bottom"))
+        #expect(source.contains("OpenClawGlassControlGroup"))
+        #expect(source.contains(".glassEffect(.regular.interactive(), in: .capsule)"))
+        #expect(source.contains(".background(.ultraThinMaterial, in: Capsule())"))
+        #expect(source.contains(".matchedGeometryEffect(id: \"FamilyAgent.Tab.Selection\""))
+        #expect(source.contains(".accessibilityAddTraits(self.selectedTab == tab ? .isSelected : [])"))
+        #expect(!source.contains("Divider()\n            self.tabBar"))
+        #expect(!source.contains(".background(.bar)"))
+    }
+
     @Test func `unverified access is gated before the admin shell`() throws {
         let source = try Self.source("Sources/RootTabs.swift")
         let rootContent = try Self.extract(
