@@ -635,6 +635,34 @@ CREATE TABLE IF NOT EXISTS device_pairing_paired (
 CREATE INDEX IF NOT EXISTS idx_device_pairing_paired_approved
   ON device_pairing_paired(approved_at_ms DESC, device_id);
 
+-- Family invitations are first-use state. Secrets never cross this boundary:
+-- token_hash is a SHA-256 verifier and setup codes remain with device bootstrap.
+CREATE TABLE IF NOT EXISTS family_invites (
+  invite_id TEXT NOT NULL PRIMARY KEY,
+  token_hash TEXT NOT NULL UNIQUE,
+  agent_id TEXT NOT NULL,
+  role_name TEXT NOT NULL,
+  display_name TEXT,
+  state TEXT NOT NULL CHECK (state IN ('pending', 'redeeming', 'active', 'revocation_pending', 'revoked')),
+  created_at_ms INTEGER NOT NULL,
+  expires_at_ms INTEGER NOT NULL,
+  public_key_thumbprint TEXT,
+  setup_id TEXT UNIQUE,
+  profile_id TEXT,
+  device_id TEXT,
+  gateway_public_key TEXT,
+  redeemed_at_ms INTEGER,
+  revoked_at_ms INTEGER,
+  updated_at_ms INTEGER NOT NULL
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_family_invites_expiry
+  ON family_invites(state, expires_at_ms);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_family_invites_active_device
+  ON family_invites(device_id)
+  WHERE state = 'active' AND device_id IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS device_bootstrap_tokens (
   token_key TEXT NOT NULL PRIMARY KEY,
   token TEXT NOT NULL,

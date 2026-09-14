@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "openclaw-family-relay",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-12",
+  "observability": { "enabled": true },
+  "vars": {
+    "EDGE_TOKEN_AUDIENCE": "openclaw-family-relay",
+    "GATEWAY_WS_URL": "wss://gateway.example.invalid",
+    "IOS_APP_ID": "TEAMID.ai.openclaw.ios",
+    "RELAY_PUBLIC_URL": "https://relay.example.invalid",
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "FAMILY_RELAY_GUARD", "class_name": "FamilyRelayGuard" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["FamilyRelayGuard"] }],
+}

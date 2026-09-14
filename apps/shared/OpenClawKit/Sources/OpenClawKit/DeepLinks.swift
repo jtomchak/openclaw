@@ -78,6 +78,39 @@ public enum DeepLinkRoute: Sendable, Equatable {
     case dashboard
 }
 
+/// A one-time family enrollment intent. The secret stays in the fragment so it is
+/// never sent by a browser while the universal link is being opened.
+public struct FamilyInviteDeepLink: Sendable, Equatable {
+    public static let path = "/family/invite"
+
+    public let relayBaseURL: URL
+    public let inviteToken: String
+
+    public init?(url: URL, allowedHosts: Set<String>) {
+        guard url.baseURL == nil,
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              components.scheme?.lowercased() == "https",
+              let host = components.host?.lowercased(), allowedHosts.contains(host),
+              components.user == nil,
+              components.password == nil,
+              components.port == nil,
+              components.percentEncodedPath == Self.path,
+              components.query == nil,
+              let fragment = components.percentEncodedFragment,
+              !fragment.isEmpty,
+              fragment.count <= 2048,
+              fragment.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") })
+        else { return nil }
+        components.host = host
+        components.path = ""
+        components.query = nil
+        components.fragment = nil
+        guard let relayBaseURL = components.url else { return nil }
+        self.relayBaseURL = relayBaseURL
+        self.inviteToken = fragment
+    }
+}
+
 /// An address to add, never a grant of access or a replacement for the current gateway.
 public struct GatewayAddDeepLink: Sendable, Equatable {
     public let url: URL

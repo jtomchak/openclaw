@@ -104,6 +104,16 @@ export function ensureDevicePairingJoinCodeSchema(database: DatabaseSync): void 
   ); // sqlite-allow-raw -- Canonical additive DDL only.
 }
 
+/** Lazily installs trusted family invitation and device-binding state. */
+export function ensureFamilyInvitesSchema(database: DatabaseSync): void {
+  database.exec(
+    extractSqliteTableSchema(OPENCLAW_STATE_SCHEMA_SQL, "family_invites", {
+      endMarker: "WHERE state = 'active' AND device_id IS NOT NULL;",
+      errorMessage: "OpenClaw family invitation schema marker is missing.",
+    }),
+  ); // sqlite-allow-raw -- Canonical lazy additive DDL; invitation rows use Kysely.
+}
+
 /** Lazily installs the Gateway's installation-local config revision key owner. */
 export function ensureConfigRevisionKeySchema(database: DatabaseSync): void {
   database.exec(

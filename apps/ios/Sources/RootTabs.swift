@@ -140,6 +140,13 @@ struct RootTabs: View {
                 self.rootOverlays(
                     self.rootContent
                         .tint(OpenClawBrand.accent))))
+            .sheet(isPresented: Binding(
+                get: { self.appModel.familyInviteEnrollment.isPresented },
+                set: { presented in
+                    if !presented { self.appModel.familyInviteEnrollment.dismiss() }
+                })) {
+                    FamilyInviteEnrollmentView(coordinator: self.appModel.familyInviteEnrollment)
+            }
             .overlay(alignment: .topLeading) {
                 self.uiTestReadinessMarker
             }

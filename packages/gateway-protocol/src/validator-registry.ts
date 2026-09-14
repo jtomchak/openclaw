@@ -129,6 +129,10 @@ export const validateUsersGitHubAuthorizeCancelParams = compile(
 );
 export const validateUsersGitHubDisconnectParams = compile(S.UsersGitHubDisconnectParamsSchema);
 export const validateUsersSelfResult = compile(S.UsersSelfResultSchema);
+export const validateFamilyInvitesCreateParams = compile(S.FamilyInvitesCreateParamsSchema);
+export const validateFamilyInvitesRedeemParams = compile(S.FamilyInvitesRedeemParamsSchema);
+export const validateFamilyInvitesRevokeParams = compile(S.FamilyInvitesRevokeParamsSchema);
+export const validateFamilyInvitesStatusParams = compile(S.FamilyInvitesStatusParamsSchema);
 export const validateUsersLinkEmailParams = compile(S.UsersLinkEmailParamsSchema);
 export const validateUsersLinkEmailResult = compile(S.UsersLinkEmailResultSchema);
 export const validateUsersSetDisplayNameParams = compile(S.UsersSetDisplayNameParamsSchema);

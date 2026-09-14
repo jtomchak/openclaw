@@ -27,6 +27,7 @@ audit.list audit.activity.list users.list users.self users.linkEmail users.setDi
 users.setAvatar users.setRole users.listAuthLinks users.listModelAccounts users.selectModelAccount
 users.linkAuthProfile users.unlinkAuthProfile users.authConnect.start users.authConnect.answer
 users.authConnect.status users.authConnect.cancel users.authConnect.catalog
+family.invites.create family.invites.redeem family.invites.revoke family.invites.status
 tasks.list tasks.get tasks.cancel taskSuggestions.list
 taskSuggestions.create taskSuggestions.accept taskSuggestions.dismiss environments.list
 environments.status worktrees.list worktrees.branches fs.listDir worktrees.create

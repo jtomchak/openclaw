@@ -179,7 +179,26 @@ final class OpenClawAppDelegate: NSObject, UIApplicationDelegate, @preconcurrenc
         open url: URL,
         options _: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool
     {
-        guard DeepLinkParser.parse(url) != nil else { return false }
+        guard Self.isSupportedOpenURL(url) else { return false }
+        guard let model = resolvedAppModel() else {
+            self.pendingOpenURLs.append(url)
+            return true
+        }
+        Task { @MainActor in
+            await self.handleOpenURL(url, model: model)
+        }
+        return true
+    }
+
+    func application(
+        _: UIApplication,
+        continue userActivity: NSUserActivity,
+        restorationHandler _: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool
+    {
+        guard userActivity.activityType == NSUserActivityTypeBrowsingWeb,
+              let url = userActivity.webpageURL,
+              Self.isSupportedOpenURL(url)
+        else { return false }
         guard let model = resolvedAppModel() else {
             self.pendingOpenURLs.append(url)
             return true
@@ -191,6 +210,10 @@ final class OpenClawAppDelegate: NSObject, UIApplicationDelegate, @preconcurrenc
     }
 
     func handleOpenURL(_ url: URL, model: NodeAppModel) async {
+        if let invite = Self.parseFamilyInvite(url) {
+            await model.handleFamilyInviteDeepLink(invite)
+            return
+        }
         guard let route = DeepLinkParser.parse(url) else { return }
 
         switch route {
@@ -199,6 +222,14 @@ final class OpenClawAppDelegate: NSObject, UIApplicationDelegate, @preconcurrenc
         case let .gateway(link):
             model.stageGatewaySetupLink(link)
         }
+    }
+
+    private static func isSupportedOpenURL(_ url: URL) -> Bool {
+        self.parseFamilyInvite(url) != nil || DeepLinkParser.parse(url) != nil
+    }
+
+    private static func parseFamilyInvite(_ url: URL) -> FamilyInviteDeepLink? {
+        FamilyInviteDeepLink(url: url, allowedHosts: [FamilyInviteBuildConfig.relayHost])
     }
 
     private func registerForRemoteNotificationsIfEnrollmentReady(_ application: UIApplication) async {
@@ -709,6 +740,9 @@ struct OpenClawApp: App {
             UserDefaults.standard.set(true, forKey: "gateway.hasConnectedOnce")
             UserDefaults.standard.set(true, forKey: "onboarding.quickSetupDismissed")
             appModel.enterScreenshotFixtureMode()
+            if ProcessInfo.processInfo.arguments.contains(FamilyInviteEnrollmentCoordinator.screenshotArgument) {
+                appModel.familyInviteEnrollment.presentScreenshotFixture()
+            }
             if Self.screenshotNotificationGuidanceEnabled {
                 appModel._debug_presentNotificationPermissionGuidancePromptForScreenshot()
             }
@@ -772,6 +806,7 @@ struct OpenClawApp: App {
     private static var screenshotModeEnabled: Bool {
         #if DEBUG
         ProcessInfo.processInfo.arguments.contains("--openclaw-screenshot-mode") ||
+            ProcessInfo.processInfo.arguments.contains(FamilyInviteEnrollmentCoordinator.screenshotArgument) ||
             FamilyAgentScreenshotMode.isEnabled(arguments: ProcessInfo.processInfo.arguments) ||
             ConnectedFamilyAgentShellFixture.isEnabled(arguments: ProcessInfo.processInfo.arguments)
         #else

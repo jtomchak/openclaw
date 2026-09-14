@@ -14,6 +14,10 @@ import {
   recordPairedNodeConnection,
 } from "../../../infra/device-pairing-node.js";
 import { getGatewaySuspendAdmissionPhase } from "../../../process/gateway-work-admission.js";
+import {
+  bindFamilyInviteDevice,
+  readFamilyInviteBySetupId,
+} from "../../../state/family-invites.js";
 import { hasMultipleSessionSharingIdentities } from "../../../state/user-profiles.js";
 import { resolveRuntimeServiceBuildId, resolveRuntimeServiceVersion } from "../../../version.js";
 import { resolveChatAttachmentPolicy } from "../../chat-attachment-policy.js";
@@ -227,6 +231,23 @@ export async function sendGatewayHello(
             return;
           }
           bootstrapHandoff = consumed;
+          if (
+            consumed.completion &&
+            devicePublicKey &&
+            readFamilyInviteBySetupId(consumed.completion.setupId)
+          ) {
+            const bound = bindFamilyInviteDevice({
+              setupId: consumed.completion.setupId,
+              deviceId: device.id,
+              gatewayPublicKey: devicePublicKey,
+            });
+            if (!bound && consumed.record.setupId) {
+              await releasePendingNodePairingCleanup();
+              setCloseCause("family-invite-bind-failed");
+              close();
+              return;
+            }
+          }
         }
       }
     } catch (err) {

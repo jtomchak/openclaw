@@ -591,6 +591,25 @@ export interface ExecutionOwnerLifecycleBindings {
   owner_kind: string;
 }
 
+export interface FamilyInvites {
+  agent_id: string;
+  created_at_ms: number;
+  device_id: string | null;
+  display_name: string | null;
+  expires_at_ms: number;
+  gateway_public_key: string | null;
+  invite_id: string;
+  profile_id: string | null;
+  public_key_thumbprint: string | null;
+  redeemed_at_ms: number | null;
+  revoked_at_ms: number | null;
+  role_name: string;
+  setup_id: string | null;
+  state: string;
+  token_hash: string;
+  updated_at_ms: number;
+}
+
 export interface FleetCells {
   container_name: string;
   created_at_ms: number;
@@ -1777,6 +1796,7 @@ export interface DB {
   execution_decision_facts: ExecutionDecisionFacts;
   execution_identity_contexts: ExecutionIdentityContexts;
   execution_owner_lifecycle_bindings: ExecutionOwnerLifecycleBindings;
+  family_invites: FamilyInvites;
   fleet_cells: FleetCells;
   flow_runs: FlowRuns;
   gateway_boot_lifecycle: GatewayBootLifecycle;

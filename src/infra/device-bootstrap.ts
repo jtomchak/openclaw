@@ -415,6 +415,31 @@ export async function revokeDeviceBootstrapToken(params: {
   });
 }
 
+/** Revoke the outstanding bearer for one correlated setup without exposing it. */
+export async function revokeDeviceBootstrapTokenForSetupId(params: {
+  setupId: string;
+  baseDir?: string;
+}): Promise<{ removed: number }> {
+  return await withLock(async () => {
+    const setupId = params.setupId.trim();
+    if (!setupId) {
+      return { removed: 0 };
+    }
+    const state = await loadState(params.baseDir);
+    let removed = 0;
+    for (const [tokenKey, record] of Object.entries(state)) {
+      if (record.setupId === setupId) {
+        delete state[tokenKey];
+        removed += 1;
+      }
+    }
+    if (removed > 0) {
+      persistState(state, params.baseDir);
+    }
+    return { removed };
+  });
+}
+
 /** Revoke bootstrap tokens that are already bound to a specific device identity. */
 export async function revokeDeviceBootstrapTokensForDevice(params: {
   deviceId: string;

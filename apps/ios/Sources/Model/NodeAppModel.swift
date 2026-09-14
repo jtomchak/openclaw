@@ -399,6 +399,7 @@ final class NodeAppModel {
     }
 
     private(set) var connectedFamilyAgentState: ConnectedFamilyAgentState = .disconnected
+    let familyInviteEnrollment = FamilyInviteEnrollmentCoordinator()
     private(set) var pendingFamilyAgentChatPrompt: FamilyAgentChatPrompt?
     private var nextFamilyAgentChatPromptID = 0
 
@@ -4801,6 +4802,7 @@ extension NodeAppModel {
                     allowStoredDeviceAuth: reconnectOptions.allowStoredDeviceAuth)
 
                 do {
+                    await FamilyInviteEdgeCredentials.refreshIfNeeded(for: url)
                     try await self.operatorGateway.connect(
                         url: url,
                         credentials: GatewayNodeSessionCredentials(
@@ -4810,7 +4812,9 @@ extension NodeAppModel {
                         connectOptions: operatorOptions,
                         sessionBox: sessionBox,
                         extraHeadersProvider: {
-                            GatewaySettingsStore.loadGatewayCustomHeaders(gatewayStableID: stableID)
+                            FamilyInviteEdgeCredentials.mergingUpgradeHeaders(
+                                GatewaySettingsStore.loadGatewayCustomHeaders(gatewayStableID: stableID),
+                                for: url)
                         },
                         onConnected: { [weak self] in
                             await self?.handleOperatorGatewayConnected(
@@ -5068,6 +5072,7 @@ extension NodeAppModel {
         GatewayDiagnostics.log("connect attempt epochMs=\(epochMs) url=\(context.url.absoluteString)")
 
         do {
+            await FamilyInviteEdgeCredentials.refreshIfNeeded(for: context.url)
             try await self.nodeGateway.connect(
                 url: context.url,
                 credentials: GatewayNodeSessionCredentials(
@@ -5077,7 +5082,9 @@ extension NodeAppModel {
                 connectOptions: connectedOptions,
                 sessionBox: context.sessionBox,
                 extraHeadersProvider: {
-                    GatewaySettingsStore.loadGatewayCustomHeaders(gatewayStableID: context.stableID)
+                    FamilyInviteEdgeCredentials.mergingUpgradeHeaders(
+                        GatewaySettingsStore.loadGatewayCustomHeaders(gatewayStableID: context.stableID),
+                        for: context.url)
                 },
                 onConnected: { [weak self] in
                     await self?.handleNodeGatewayConnected(
@@ -10152,6 +10159,12 @@ extension NodeAppModel {
             self.recordShareEvent(
                 "This browser sign-in link is for the OpenClaw Mac app. Use a device pairing link on iOS.")
         }
+    }
+
+    func handleFamilyInviteDeepLink(_ invite: FamilyInviteDeepLink) async {
+        guard let setupLink = await self.familyInviteEnrollment.enroll(invite) else { return }
+        self.stageGatewaySetupLink(setupLink)
+        self.familyInviteEnrollment.markHandoffComplete()
     }
 
     func stageGatewaySetupLink(_ link: GatewayConnectDeepLink) {

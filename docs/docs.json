@@ -2649,7 +2649,8 @@
                   "gateway/remote",
                   "gateway/stable-https-url",
                   "gateway/tailscale",
-                  "gateway/cloudflare-access"
+                  "gateway/cloudflare-access",
+                  "gateway/family-agent-relay"
                 ]
               },
               {
