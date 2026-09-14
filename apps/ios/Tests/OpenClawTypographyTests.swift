@@ -361,6 +361,16 @@ struct OpenClawTypographyTests {
         #expect(!chatTypography.contains("Font.system(textStyle, design: .monospaced)"))
     }
 
+    @Test func `family agent draft uses branded typography`() throws {
+        let source = try String(
+            contentsOf: Self.sourceURL("Settings/FamilyAgentDraftScreen.swift"),
+            encoding: .utf8)
+
+        #expect(source.contains(".font(OpenClawType.title3SemiBold)"))
+        #expect(source.contains(".font(OpenClawType.subheadSemiBold)"))
+        #expect(source.contains(".font(OpenClawType.caption)"))
+    }
+
     @Test func `chat model menu uses branded typography`() throws {
         let chatTab = try String(contentsOf: Self.sourceURL("Design/ChatProTab.swift"), encoding: .utf8)
         let menu = try String(

@@ -95,14 +95,12 @@ struct TrustedAgentProvisioningBlueprint: Codable, Equatable, Sendable {
         capabilities: Capabilities = .init(
             connectorAuthorization: .trustedPerson,
             modelAuthorization: .trustedPerson,
-            credentialMaterialAccess: .gatewayOnly,
-        ),
+            credentialMaterialAccess: .gatewayOnly),
         inferencePolicy: InferencePolicy = .init(
             allowedRoutes: [.codex, .ollamaCloud],
-            isParentManaged: true,
-        ),
-    ) {
-        ownership = Ownership(profileID: ownerProfileID)
+            isParentManaged: true))
+    {
+        self.ownership = Ownership(profileID: ownerProfileID)
         self.isolationLevel = isolationLevel
         self.storage = storage
         self.access = access
@@ -113,35 +111,35 @@ struct TrustedAgentProvisioningBlueprint: Codable, Equatable, Sendable {
     var validationIssues: [ValidationIssue] {
         var issues: [ValidationIssue] = []
 
-        if ownership.profileID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if self.ownership.profileID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             issues.append(.missingOwnerProfileID)
         }
-        if storage.agentDirectory != .dedicated {
+        if self.storage.agentDirectory != .dedicated {
             issues.append(.agentDirectoryMustBeDedicated)
         }
-        if storage.workspace != .dedicated {
+        if self.storage.workspace != .dedicated {
             issues.append(.workspaceMustBeDedicated)
         }
-        if access.crossAgentTools != .disabled {
+        if self.access.crossAgentTools != .disabled {
             issues.append(.crossAgentToolsMustBeDisabled)
         }
-        if access.sessionVisibility != .sameAgent {
+        if self.access.sessionVisibility != .sameAgent {
             issues.append(.sessionVisibilityMustBeSameAgent)
         }
-        if capabilities.connectorAuthorization != .trustedPerson {
+        if self.capabilities.connectorAuthorization != .trustedPerson {
             issues.append(.connectorAuthorizationMustBePersonal)
         }
-        if capabilities.modelAuthorization != .trustedPerson {
+        if self.capabilities.modelAuthorization != .trustedPerson {
             issues.append(.modelAuthorizationMustBePersonal)
         }
         let allowedRoutes = Set(inferencePolicy.allowedRoutes)
-        if !inferencePolicy.isParentManaged ||
+        if !self.inferencePolicy.isParentManaged ||
             allowedRoutes.isEmpty ||
-            allowedRoutes.count != inferencePolicy.allowedRoutes.count
+            allowedRoutes.count != self.inferencePolicy.allowedRoutes.count
         {
             issues.append(.inferenceRoutesMustBeAllowed)
         }
-        if capabilities.credentialMaterialAccess != .gatewayOnly {
+        if self.capabilities.credentialMaterialAccess != .gatewayOnly {
             issues.append(.credentialMaterialMustRemainOnGateway)
         }
 
@@ -149,6 +147,6 @@ struct TrustedAgentProvisioningBlueprint: Codable, Equatable, Sendable {
     }
 
     var isValid: Bool {
-        validationIssues.isEmpty
+        self.validationIssues.isEmpty
     }
 }

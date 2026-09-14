@@ -771,7 +771,8 @@ struct OpenClawApp: App {
 
     private static var screenshotModeEnabled: Bool {
         #if DEBUG
-        ProcessInfo.processInfo.arguments.contains("--openclaw-screenshot-mode")
+        ProcessInfo.processInfo.arguments.contains("--openclaw-screenshot-mode") ||
+            FamilyAgentScreenshotMode.isEnabled(arguments: ProcessInfo.processInfo.arguments)
         #else
         false
         #endif
