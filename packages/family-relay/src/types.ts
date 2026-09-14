@@ -33,5 +33,6 @@ export interface RelayEnv {
   GATEWAY_WS_URL: string;
   IOS_APP_ID: string;
   OPENCLAW_GATEWAY_TOKEN: string;
+  RELAY_DEVICE_IDENTITY: string;
   RELAY_PUBLIC_URL: string;
 }

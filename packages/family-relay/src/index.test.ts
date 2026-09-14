@@ -39,6 +39,11 @@ function environment(): RelayEnv {
     GATEWAY_WS_URL: "wss://gateway.example.invalid",
     IOS_APP_ID: "TEAMID.ai.openclaw.ios",
     OPENCLAW_GATEWAY_TOKEN: "synthetic-admin-token",
+    RELAY_DEVICE_IDENTITY: JSON.stringify({
+      deviceId: "a".repeat(64),
+      privateKey: { crv: "Ed25519", d: "fixture-private", kty: "OKP", x: "fixture-public" },
+      publicKey: "A".repeat(43),
+    }),
     RELAY_PUBLIC_URL: "https://relay.example.invalid",
   };
 }

@@ -318,6 +318,7 @@ export async function handleFamilyRelayRequest(
     createFamilyGatewayRpc({
       accessClientId: env.CF_ACCESS_CLIENT_ID,
       accessClientSecret: env.CF_ACCESS_CLIENT_SECRET,
+      deviceIdentity: env.RELAY_DEVICE_IDENTITY,
       gatewayToken: env.OPENCLAW_GATEWAY_TOKEN,
       gatewayUrl: env.GATEWAY_WS_URL,
     });
@@ -336,6 +337,10 @@ export async function handleFamilyRelayRequest(
     return errorResponse(404);
   } catch (error) {
     if (error instanceof RelayAdmissionError) return errorResponse(error.status);
+    console.error(
+      "family relay request failed",
+      error instanceof Error ? error.message : "unknown",
+    );
     return errorResponse(400);
   }
 }

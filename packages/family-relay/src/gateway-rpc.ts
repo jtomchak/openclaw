@@ -12,6 +12,85 @@ interface GatewayFrame {
   type?: string;
 }
 
+interface RelayDeviceIdentity {
+  deviceId: string;
+  privateKey: JsonWebKey;
+  publicKey: string;
+}
+
+function parseRelayDeviceIdentity(raw: string): RelayDeviceIdentity {
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    throw new Error("invalid relay device identity");
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new Error("invalid relay device identity");
+  const identity = value as Partial<RelayDeviceIdentity>;
+  if (
+    typeof identity.deviceId !== "string" ||
+    !/^[a-f0-9]{64}$/u.test(identity.deviceId) ||
+    typeof identity.publicKey !== "string" ||
+    !/^[A-Za-z0-9_-]{43}$/u.test(identity.publicKey) ||
+    !identity.privateKey ||
+    identity.privateKey.kty !== "OKP" ||
+    identity.privateKey.crv !== "Ed25519" ||
+    typeof identity.privateKey.d !== "string" ||
+    typeof identity.privateKey.x !== "string"
+  ) {
+    throw new Error("invalid relay device identity");
+  }
+  return identity as RelayDeviceIdentity;
+}
+
+function base64Url(bytes: ArrayBuffer): string {
+  const input = new Uint8Array(bytes);
+  let binary = "";
+  for (const byte of input) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
+}
+
+async function signedRelayDevice(params: {
+  challenge: GatewayFrame;
+  identity: RelayDeviceIdentity;
+  scopes: string[];
+  token: string;
+}): Promise<Record<string, unknown>> {
+  const payload = params.challenge.payload as { nonce?: unknown; ts?: unknown } | undefined;
+  const nonce = typeof payload?.nonce === "string" ? payload.nonce : "";
+  const signedAtMs = typeof payload?.ts === "number" ? payload.ts : NaN;
+  if (!nonce || !Number.isSafeInteger(signedAtMs)) throw new Error("Gateway challenge is invalid");
+  const key = await crypto.subtle.importKey(
+    "jwk",
+    params.identity.privateKey,
+    { name: "Ed25519" },
+    false,
+    ["sign"],
+  );
+  const authPayload = [
+    "v3",
+    params.identity.deviceId,
+    "gateway-client",
+    "backend",
+    "operator",
+    params.scopes.join(","),
+    String(signedAtMs),
+    params.token,
+    nonce,
+    "cloudflare-workers",
+    "",
+  ].join("|");
+  const signature = await crypto.subtle.sign("Ed25519", key, new TextEncoder().encode(authPayload));
+  return {
+    id: params.identity.deviceId,
+    nonce,
+    publicKey: params.identity.publicKey,
+    signature: base64Url(signature),
+    signedAt: signedAtMs,
+  };
+}
+
 export interface FamilyGatewayRpc {
   redeem(params: {
     publicKeyThumbprint: string;
@@ -45,7 +124,8 @@ async function openGatewaySocket(
     },
   });
   const socket = response.webSocket;
-  if (response.status !== 101 || !socket) throw new Error("Gateway WebSocket unavailable");
+  if (response.status !== 101 || !socket)
+    throw new Error(`Gateway WebSocket unavailable (${response.status})`);
   const challenge = waitForFrame(
     socket,
     (frame) => frame.type === "event" && frame.event === "connect.challenge",
@@ -105,6 +185,7 @@ async function callGateway(params: {
   gatewayUrl: string;
   accessClientId: string;
   accessClientSecret: string;
+  deviceIdentity: RelayDeviceIdentity;
   method: string;
   payload: unknown;
 }): Promise<unknown> {
@@ -114,7 +195,8 @@ async function callGateway(params: {
   });
   const { socket } = opened;
   try {
-    await opened.challenge;
+    const challenge = await opened.challenge;
+    const scopes = ["operator.admin"];
     await request(socket, "connect", {
       auth: { token: params.gatewayToken },
       caps: [],
@@ -127,7 +209,13 @@ async function callGateway(params: {
       maxProtocol: PROTOCOL_VERSION,
       minProtocol: PROTOCOL_VERSION,
       role: "operator",
-      scopes: ["operator.admin"],
+      scopes,
+      device: await signedRelayDevice({
+        challenge,
+        identity: params.deviceIdentity,
+        scopes,
+        token: params.gatewayToken,
+      }),
     });
     return await request(socket, params.method, params.payload);
   } finally {
@@ -138,14 +226,17 @@ async function callGateway(params: {
 export function createFamilyGatewayRpc(params: {
   accessClientId: string;
   accessClientSecret: string;
+  deviceIdentity: string;
   gatewayToken: string;
   gatewayUrl: string;
 }): FamilyGatewayRpc {
+  const deviceIdentity = parseRelayDeviceIdentity(params.deviceIdentity);
   return {
     async redeem(input) {
       return (await callGateway({
         accessClientId: params.accessClientId,
         accessClientSecret: params.accessClientSecret,
+        deviceIdentity,
         gatewayToken: params.gatewayToken,
         gatewayUrl: params.gatewayUrl,
         method: "family.invites.redeem",
@@ -156,6 +247,7 @@ export function createFamilyGatewayRpc(params: {
       return (await callGateway({
         accessClientId: params.accessClientId,
         accessClientSecret: params.accessClientSecret,
+        deviceIdentity,
         gatewayToken: params.gatewayToken,
         gatewayUrl: params.gatewayUrl,
         method: "family.invites.status",
