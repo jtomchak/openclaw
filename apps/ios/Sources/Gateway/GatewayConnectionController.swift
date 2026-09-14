@@ -643,6 +643,7 @@ final class GatewayConnectionController {
     }
 
     private func performForgetGateway(stableID: String) async -> Bool {
+        FamilyInviteEdgeCredentials.clear(stableID: stableID)
         self.cancelOperatorFleetReconcile()
         self.operatorFleet.stop(stableID: stableID)
         if GatewayStableIdentifier.matches(self.pendingConnectionStableID, stableID) ||

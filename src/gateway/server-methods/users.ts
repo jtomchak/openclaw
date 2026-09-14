@@ -29,7 +29,10 @@ import {
   setUserProfileRole,
   UserProfileNotFoundError,
 } from "../../state/user-profiles.js";
-import { invalidateOperatorRolePolicy } from "../operator-role-policy.js";
+import {
+  invalidateOperatorRolePolicy,
+  resolveOperatorRolePolicyForProfile,
+} from "../operator-role-policy.js";
 import { broadcastChatMetadataChanged } from "../server-chat-metadata-lifecycle.js";
 import {
   authenticatedProfileUnavailableError,
@@ -84,7 +87,7 @@ export const usersHandlers: GatewayRequestHandlers = {
     }
     respond(true, { profiles: listProfiles() });
   },
-  "users.self": async ({ client, params, respond }) => {
+  "users.self": async ({ client, context, params, respond }) => {
     if (!assertValidParams(params, validateUsersSelfParams, "users.self", respond)) {
       return;
     }
@@ -109,7 +112,15 @@ export const usersHandlers: GatewayRequestHandlers = {
         respond(false, undefined, authenticatedProfileUnavailableError());
         return;
       }
-      respond(true, { profile: getUserProfileListItem(profileId) });
+      const role = resolveOperatorRolePolicyForProfile(profileId, context.getRuntimeConfig());
+      const assignedAgentId =
+        role &&
+        role.agents !== "*" &&
+        role.agents.length === 1 &&
+        !role.scopes.includes("operator.admin")
+          ? role.agents[0]
+          : null;
+      respond(true, { profile: getUserProfileListItem(profileId), assignedAgentId });
     } catch (error) {
       respond(false, undefined, profileError(error));
     }

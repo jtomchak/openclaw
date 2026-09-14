@@ -705,6 +705,7 @@ extension SettingsProTab {
 
     func title(for route: SettingsRoute) -> String {
         switch route {
+        case .familyAgents: String(localized: "Family Agents")
         case .gateway: String(localized: "Gateway")
         case .appleWatch: String(localized: "Apple Watch")
         case .approvals: String(localized: "Approvals")

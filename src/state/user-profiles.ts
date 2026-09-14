@@ -129,6 +129,27 @@ function insertUserProfile(
   return row;
 }
 
+/** Create an email-less person and assign its role on the caller's admitted transaction. */
+export function createUserProfileWithRoleInTransaction(
+  db: DatabaseSync,
+  params: { displayName?: string; role: string; nowMs: number },
+): { profileId: string } {
+  const profile = insertUserProfile(
+    db,
+    normalizeInitialDisplayName(params.displayName),
+    params.nowMs,
+  );
+  executeSqliteQuerySync(
+    db,
+    userProfilesDb(db)
+      .updateTable("user_profiles")
+      .set({ role: params.role, updated_at: params.nowMs })
+      .where("id", "=", profile.id),
+  );
+  deferSqlitePostCommitPublication(db, emitUserProfilesChanged);
+  return { profileId: profile.id };
+}
+
 function toUserProfileListItem(
   row: UserProfileListRow,
   emails: string[],

@@ -42,6 +42,7 @@ export {
 } from "./ui-appearance-preferences.js";
 
 const UserProfileIdSchema = Type.String({ minLength: 1, maxLength: 128 });
+const AssignedAgentIdSchema = Type.String({ minLength: 1, maxLength: 128 });
 const UserProfileDisplayNameSchema = Type.String({ maxLength: 256 });
 const UserProfileRoleSchema = Type.String({ minLength: 1, maxLength: 128, pattern: "\\S" });
 const UserPreferenceKeySchema = Type.String({ pattern: "^.{1,256}$" });
@@ -77,7 +78,10 @@ export const UsersListParamsSchema = closedObject({});
 export const UsersListResultSchema = closedObject({ profiles: Type.Array(UserProfileSchema) });
 
 export const UsersSelfParamsSchema = closedObject({});
-export const UsersSelfResultSchema = closedObject({ profile: UserProfileSchema });
+export const UsersSelfResultSchema = closedObject({
+  profile: UserProfileSchema,
+  assignedAgentId: Type.Union([AssignedAgentIdSchema, Type.Null()]),
+});
 
 export const UsersLinkEmailParamsSchema = closedObject({
   email: Type.String({ minLength: 1, maxLength: 320 }),

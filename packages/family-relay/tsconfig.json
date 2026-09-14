@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "lib": ["ES2023", "WebWorker"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2023",
+    "types": [],
+    "paths": {
+      "@openclaw/gateway-protocol/*": ["../gateway-protocol/src/*"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

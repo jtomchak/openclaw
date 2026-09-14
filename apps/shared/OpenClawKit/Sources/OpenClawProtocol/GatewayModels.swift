@@ -113,6 +113,15 @@ public enum EnvironmentStatus: String, Codable, Sendable {
     case error = "error"
 }
 
+public enum FamilyInviteState: String, Codable, Sendable {
+    case pending = "pending"
+    case redeeming = "redeeming"
+    case active = "active"
+    case revocationPending = "revocation_pending"
+    case revoked = "revoked"
+    case expired = "expired"
+}
+
 public enum GitHubIdentityScope: String, Codable, Sendable {
     case system = "system"
     case agent = "agent"
@@ -7522,6 +7531,195 @@ public struct ExternalPostApprovalScope: Codable, Sendable {
         self.kind = kind
         self.target = target
         self.visibility = visibility
+    }
+}
+
+public struct FamilyInvite: Codable, Sendable {
+    public let inviteid: String
+    public let agentid: String
+    public let role: String
+    public let displayname: String?
+    public let state: FamilyInviteState
+    public let createdatms: Int
+    public let expiresatms: Int
+    public let redeemedatms: Int?
+    public let revokedatms: Int?
+    public let publickeythumbprint: String?
+    public let deviceid: String?
+
+    public init(
+        inviteid: String,
+        agentid: String,
+        role: String,
+        displayname: String? = nil,
+        state: FamilyInviteState,
+        createdatms: Int,
+        expiresatms: Int,
+        redeemedatms: Int? = nil,
+        revokedatms: Int? = nil,
+        publickeythumbprint: String? = nil,
+        deviceid: String? = nil)
+    {
+        self.inviteid = inviteid
+        self.agentid = agentid
+        self.role = role
+        self.displayname = displayname
+        self.state = state
+        self.createdatms = createdatms
+        self.expiresatms = expiresatms
+        self.redeemedatms = redeemedatms
+        self.revokedatms = revokedatms
+        self.publickeythumbprint = publickeythumbprint
+        self.deviceid = deviceid
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case inviteid = "inviteId"
+        case agentid = "agentId"
+        case role
+        case displayname = "displayName"
+        case state
+        case createdatms = "createdAtMs"
+        case expiresatms = "expiresAtMs"
+        case redeemedatms = "redeemedAtMs"
+        case revokedatms = "revokedAtMs"
+        case publickeythumbprint = "publicKeyThumbprint"
+        case deviceid = "deviceId"
+    }
+}
+
+public struct FamilyInvitesCreateParams: Codable, Sendable {
+    public let agentid: String
+    public let role: String
+    public let displayname: String?
+    public let expiresinms: Int?
+
+    public init(
+        agentid: String,
+        role: String,
+        displayname: String? = nil,
+        expiresinms: Int? = nil)
+    {
+        self.agentid = agentid
+        self.role = role
+        self.displayname = displayname
+        self.expiresinms = expiresinms
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case agentid = "agentId"
+        case role
+        case displayname = "displayName"
+        case expiresinms = "expiresInMs"
+    }
+}
+
+public struct FamilyInvitesCreateResult: Codable, Sendable {
+    public let invite: FamilyInvite
+    public let token: String
+
+    public init(
+        invite: FamilyInvite,
+        token: String)
+    {
+        self.invite = invite
+        self.token = token
+    }
+}
+
+public struct FamilyInvitesRedeemParams: Codable, Sendable {
+    public let token: String
+    public let publickeythumbprint: String
+    public let relayurl: String?
+
+    public init(
+        token: String,
+        publickeythumbprint: String,
+        relayurl: String? = nil)
+    {
+        self.token = token
+        self.publickeythumbprint = publickeythumbprint
+        self.relayurl = relayurl
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case token
+        case publickeythumbprint = "publicKeyThumbprint"
+        case relayurl = "relayUrl"
+    }
+}
+
+public struct FamilyInvitesRedeemResult: Codable, Sendable {
+    public let invite: FamilyInvite
+    public let setupid: String
+    public let setupcode: String
+    public let setupexpiresatms: Int
+
+    public init(
+        invite: FamilyInvite,
+        setupid: String,
+        setupcode: String,
+        setupexpiresatms: Int)
+    {
+        self.invite = invite
+        self.setupid = setupid
+        self.setupcode = setupcode
+        self.setupexpiresatms = setupexpiresatms
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case invite
+        case setupid = "setupId"
+        case setupcode = "setupCode"
+        case setupexpiresatms = "setupExpiresAtMs"
+    }
+}
+
+public struct FamilyInvitesRevokeParams: Codable, Sendable {
+    public let inviteid: String
+
+    public init(
+        inviteid: String)
+    {
+        self.inviteid = inviteid
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case inviteid = "inviteId"
+    }
+}
+
+public struct FamilyInvitesRevokeResult: Codable, Sendable {
+    public let invite: FamilyInvite
+
+    public init(
+        invite: FamilyInvite)
+    {
+        self.invite = invite
+    }
+}
+
+public struct FamilyInvitesStatusParams: Codable, Sendable {
+    public let inviteid: String
+
+    public init(
+        inviteid: String)
+    {
+        self.inviteid = inviteid
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case inviteid = "inviteId"
+    }
+}
+
+public struct FamilyInvitesStatusResult: Codable, Sendable {
+    public let invite: FamilyInvite
+
+    public init(
+        invite: FamilyInvite)
+    {
+        self.invite = invite
     }
 }
 

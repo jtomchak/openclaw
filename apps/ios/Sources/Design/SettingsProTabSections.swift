@@ -16,6 +16,21 @@ struct SettingsIcon: View {
 }
 
 extension SettingsProTab {
+    var familyAgentsSection: some View {
+        Section {
+            self.settingsListRow(
+                icon: "person.2.fill",
+                iconColor: OpenClawBrand.accent,
+                title: "Family Agents",
+                route: .familyAgents)
+                .accessibilityIdentifier("settings-family-agents-row")
+        } header: {
+            Text("Family")
+                .font(OpenClawType.captionSemiBold)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     var offlineDeviceSection: some View {
         Section {
             self.settingsListRow(
@@ -64,23 +79,31 @@ extension SettingsProTab {
     }
 
     func destination(for route: SettingsRoute) -> some View {
-        List {
-            switch route {
-            case .gateway:
-                self.gatewayDestination
-            case .appleWatch:
-                self.appleWatchDestination
-            case .approvals:
-                self.approvalsDestination
-            case .diagnostics:
-                self.diagnosticsDestination
-            case .about:
-                self.aboutDestination
-            case .licenses:
-                self.licensesDestination
+        Group {
+            if route == .familyAgents {
+                FamilyAgentDraftScreen()
+            } else {
+                List {
+                    switch route {
+                    case .familyAgents:
+                        EmptyView()
+                    case .gateway:
+                        self.gatewayDestination
+                    case .appleWatch:
+                        self.appleWatchDestination
+                    case .approvals:
+                        self.approvalsDestination
+                    case .diagnostics:
+                        self.diagnosticsDestination
+                    case .about:
+                        self.aboutDestination
+                    case .licenses:
+                        self.licensesDestination
+                    }
+                }
+                .font(OpenClawType.body)
             }
         }
-        .font(OpenClawType.body)
         .navigationTitle(title(for: route))
         .navigationBarTitleDisplayMode(.inline)
         .task(id: route) {

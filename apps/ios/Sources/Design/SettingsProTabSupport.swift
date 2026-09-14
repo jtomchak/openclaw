@@ -4,6 +4,7 @@ import UIKit
 import UserNotifications
 
 enum SettingsRoute: Hashable {
+    case familyAgents
     case gateway
     case appleWatch
     case approvals

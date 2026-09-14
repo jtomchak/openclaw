@@ -78,6 +78,7 @@ struct ChatProTab: View {
                 await self.appModel.restoreChatSessionRoutingIdentityIfNeeded()
                 self.syncChatViewModel()
                 await self.handleNewChatRequest(self.appModel.newChatRequestID)
+                await self.handleFamilyAgentPrompt(self.appModel.pendingFamilyAgentChatPrompt)
                 if self.speech == nil {
                     let gateway = self.appModel.operatorSession
                     self.speech = OpenClawChatSpeechController { text in
@@ -124,6 +125,9 @@ struct ChatProTab: View {
             .onChange(of: self.appModel.newChatRequestID) { _, requestID in
                 Task { await self.handleNewChatRequest(requestID) }
             }
+            .onChange(of: self.appModel.pendingFamilyAgentChatPrompt) { _, prompt in
+                Task { await self.handleFamilyAgentPrompt(prompt) }
+            }
     }
 
     private var content: some View {
@@ -158,14 +162,16 @@ struct ChatProTab: View {
                         self.headerGatewayStatus
                     }
                 }
-                if #available(iOS 26.0, *) {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        self.chatActionsMenu
-                    }
-                    .sharedBackgroundVisibility(.hidden)
-                } else {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        self.chatActionsMenu
+                if !self.appModel.isConnectedFamilyAgentLocked {
+                    if #available(iOS 26.0, *) {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            self.chatActionsMenu
+                        }
+                        .sharedBackgroundVisibility(.hidden)
+                    } else {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            self.chatActionsMenu
+                        }
                     }
                 }
             }
@@ -488,6 +494,15 @@ struct ChatProTab: View {
               self.appModel.consumeNewChatRequest(requestID)
         else { return }
         _ = await viewModel.startNewSession()
+    }
+
+    private func handleFamilyAgentPrompt(_ prompt: NodeAppModel.FamilyAgentChatPrompt?) async {
+        guard let prompt,
+              let viewModel,
+              let text = self.appModel.consumeFamilyAgentChatPrompt(prompt.id)
+        else { return }
+        _ = await viewModel.startNewSession()
+        viewModel.input = text
     }
 
     private func captureCurrentPresentationIdentity() {

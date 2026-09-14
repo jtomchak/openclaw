@@ -24,6 +24,7 @@ import {
 import { resolveRuntimeServiceBuildId, resolveRuntimeServiceVersion } from "../../../version.js";
 import { verifyAgentRuntimeIdentityToken } from "../../agent-runtime-identity-token.js";
 import { buildAuthenticatedPresenceUser } from "../../authenticated-presence-user.js";
+import { resolveFamilyInviteForGatewayConnect } from "../../family-invite-connect.js";
 import { shouldUseGatewayOwnerProfile } from "../../gateway-owner-profile.js";
 import { createAuthenticatedGitHubIdentitySync } from "../../github-user-identity.js";
 import {
@@ -121,6 +122,7 @@ export async function attachAuthenticatedGatewayConnect(
     device,
     devicePublicKey,
     deviceToken,
+    bootstrapTokenCandidate,
     authResult,
     authMethod,
     pairingLocality,
@@ -199,10 +201,38 @@ export async function attachAuthenticatedGatewayConnect(
   const ownerProfileExpected =
     shouldTrackPresence &&
     shouldUseGatewayOwnerProfile({ role, authenticatedUserId, authMethod, rolesConfigured });
-  let authenticatedUserProfile: GatewayWsClient["authenticatedUserProfile"];
+  // Family revocation is a device boundary, not only an operator-profile boundary.
+  // A revoked device must not retain node access if best-effort pairing cleanup failed.
+  const familyResolution =
+    (role === "operator" || role === "node") && device?.id && devicePublicKey
+      ? await resolveFamilyInviteForGatewayConnect({
+          cfg: context.configSnapshot,
+          authMethod,
+          ...(bootstrapTokenCandidate ? { bootstrapToken: bootstrapTokenCandidate } : {}),
+          deviceId: device.id,
+          gatewayPublicKey: devicePublicKey,
+        })
+      : { kind: "not-family" as const };
+  if (familyResolution.kind === "denied") {
+    const message = "family device access is no longer authorized";
+    markHandshakeFailure("family-invite-denied", { deviceId: device?.id });
+    sendHandshakeErrorResponse(ErrorCodes.FORBIDDEN, message);
+    close(1008, message);
+    return;
+  }
+  const familyInvite =
+    role === "operator" && familyResolution.kind === "allowed" ? familyResolution.invite : null;
+  let authenticatedUserProfile: GatewayWsClient["authenticatedUserProfile"] =
+    familyInvite?.profileId
+      ? resolveAuthenticatedProfile(
+          familyInvite.profileId,
+          familyInvite.redeemedAtMs ?? familyInvite.createdAtMs,
+        )
+      : undefined;
   if (
-    ownerProfileExpected ||
-    (authenticatedUserId && (!resolveAuthenticatedGitHubIdentity || rolesConfigured))
+    !authenticatedUserProfile &&
+    (ownerProfileExpected ||
+      (authenticatedUserId && (!resolveAuthenticatedGitHubIdentity || rolesConfigured)))
   ) {
     try {
       // The live profile callback refreshes edits and detached provider-avatar adoption.
@@ -391,7 +421,8 @@ export async function attachAuthenticatedGatewayConnect(
   const prepareLocalUserIngress = (profile = authenticatedUserProfile) =>
     prepareGatewayLocalUserIngress({
       authMethod,
-      authenticatedUserExpected: Boolean(authenticatedUserId) || ownerProfileExpected,
+      authenticatedUserExpected:
+        Boolean(authenticatedUserId) || ownerProfileExpected || Boolean(familyInvite),
       ...(profile
         ? {
             profile: {

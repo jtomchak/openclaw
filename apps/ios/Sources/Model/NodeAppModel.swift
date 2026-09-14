@@ -52,6 +52,38 @@ private enum GatewayConnectionWaitOwner {
 @Observable
 // swiftlint:disable type_body_length file_length
 final class NodeAppModel {
+    enum ConnectedFamilyAgentState: Equatable {
+        case disconnected
+        case verifying
+        case unrestricted
+        case locked(agentID: String)
+        case blocked
+
+        var lockedAgentID: String? {
+            guard case let .locked(agentID) = self else { return nil }
+            return agentID
+        }
+
+        var requiresRestrictedShell: Bool {
+            switch self {
+            case .verifying, .locked, .blocked: true
+            case .disconnected, .unrestricted: false
+            }
+        }
+
+        var admitsAgentRouting: Bool {
+            switch self {
+            case .verifying, .blocked: false
+            case .disconnected, .unrestricted, .locked: true
+            }
+        }
+    }
+
+    struct FamilyAgentChatPrompt: Equatable {
+        let id: Int
+        let text: String
+    }
+
     struct AgentDeepLinkPrompt: Identifiable, Equatable {
         let id: String
         let messagePreview: String
@@ -366,6 +398,19 @@ final class NodeAppModel {
         self.operatorConnected
     }
 
+    private(set) var connectedFamilyAgentState: ConnectedFamilyAgentState = .disconnected
+    let familyInviteEnrollment = FamilyInviteEnrollmentCoordinator()
+    private(set) var pendingFamilyAgentChatPrompt: FamilyAgentChatPrompt?
+    private var nextFamilyAgentChatPromptID = 0
+
+    var lockedFamilyAgentID: String? {
+        self.connectedFamilyAgentState.lockedAgentID
+    }
+
+    var isConnectedFamilyAgentLocked: Bool {
+        self.lockedFamilyAgentID != nil
+    }
+
     private(set) var isDesktopObserveAvailable: Bool = false
 
     // Privileged requests must notice authority loss even if UI observation coalesces a reconnect.
@@ -643,6 +688,7 @@ final class NodeAppModel {
             gateway: self.operatorSession,
             widgetGateway: self.nodeGateway,
             globalAgentId: self.chatDeliveryAgentId,
+            lockedAgentId: self.lockedFamilyAgentID,
             outboxGatewayID: outboxGatewayID,
             mediaArtifactLoader: mediaArtifactLoader)
     }
@@ -735,7 +781,9 @@ final class NodeAppModel {
               GatewayStableIdentifier.matches(self.chatTranscriptCacheGatewayID, store.gatewayID),
               self.chatSessionRoutingContract == nil
         else { return }
-        self.selectedAgentId = GatewaySettingsStore.loadGatewaySelectedAgentId(stableID: store.gatewayID)
+        self.selectedAgentId = self.isConnectedFamilyAgentLocked
+            ? nil
+            : GatewaySettingsStore.loadGatewaySelectedAgentId(stableID: store.gatewayID)
         self.gatewaySessionScope = identity.scope
         self.mainSessionBaseKey = identity.mainSessionKey
         self.gatewayDefaultAgentId = identity.defaultAgentID
@@ -1672,18 +1720,98 @@ final class NodeAppModel {
         }
     }
 
+    private struct UsersSelfAssignmentEnvelope: Decodable {
+        let assignedAgentID: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case assignedAgentID = "assignedAgentId"
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            guard container.contains(.assignedAgentID) else {
+                throw DecodingError.keyNotFound(
+                    CodingKeys.assignedAgentID,
+                    DecodingError.Context(
+                        codingPath: decoder.codingPath,
+                        debugDescription: "users.self omitted required assignedAgentId"))
+            }
+            self.assignedAgentID = try container.decodeIfPresent(String.self, forKey: .assignedAgentID)
+        }
+    }
+
+    nonisolated static func connectedFamilyAgentState(
+        assignedAgentID: String?,
+        agents: [AgentSummary]) -> ConnectedFamilyAgentState
+    {
+        guard let assignedAgentID else { return .unrestricted }
+        let normalized = assignedAgentID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return .blocked }
+        let matches = agents.filter { $0.id == normalized && $0.isSelectableAgent }
+        guard matches.count == 1, let match = matches.first else { return .blocked }
+        return .locked(agentID: match.id)
+    }
+
+    func applyConnectedFamilyAgentState(_ state: ConnectedFamilyAgentState) {
+        self.connectedFamilyAgentState = state
+        guard case .locked = state else {
+            self.pendingFamilyAgentChatPrompt = nil
+            if state == .blocked {
+                self.focusedChatSessionKey = nil
+            }
+            return
+        }
+        // Selection is user-owned preference, never assignment authority. Retire it
+        // while the authenticated profile supplies a single locked agent.
+        self.selectedAgentId = nil
+        if let stableID = GatewayStableIdentifier.exact(self.connectedGatewayID) {
+            GatewaySettingsStore.saveGatewaySelectedAgentId(stableID: stableID, agentId: nil)
+        }
+        self.focusedChatSessionKey = self.scopedFamilyAgentSessionKey(self.focusedChatSessionKey)
+        self.shareDeliveryChannel = nil
+        self.shareDeliveryTo = nil
+        self.synchronizeTalkSessionKey()
+    }
+
+    private func blockConnectedFamilyAgentAccessIfCurrent(
+        sourceGatewayID: String,
+        shouldApply: () -> Bool)
+    {
+        guard shouldApply(),
+              GatewayStableIdentifier.matches(self.chatTranscriptCacheGatewayID, sourceGatewayID)
+        else { return }
+        self.applyConnectedFamilyAgentState(.blocked)
+    }
+
     private func refreshAgentsFromGateway(shouldApply: () -> Bool = { true }) async {
+        guard let sourceGatewayID = self.chatTranscriptCacheGatewayID,
+              shouldApply()
+        else { return }
+        self.applyConnectedFamilyAgentState(.verifying)
         do {
-            guard let sourceGatewayID = self.chatTranscriptCacheGatewayID,
-                  let sourceStore = self.makeChatOfflineStore(),
+            guard let sourceStore = self.makeChatOfflineStore(),
                   GatewayStableIdentifier.matches(sourceStore.gatewayID, sourceGatewayID),
                   let sourceRoute = await operatorGateway.currentRoute(ifGatewayID: sourceGatewayID)
-            else { return }
+            else {
+                self.blockConnectedFamilyAgentAccessIfCurrent(
+                    sourceGatewayID: sourceGatewayID,
+                    shouldApply: shouldApply)
+                return
+            }
             let request = OpenClawChatGatewayRequests.agentsList(timeoutMs: 8000)
             let res = try await operatorGateway.request(
                 request,
                 ifCurrentRoute: sourceRoute)
             let decoded = try JSONDecoder().decode(AgentsListResult.self, from: res)
+            let selfData = try await operatorGateway.request(
+                method: "users.self",
+                paramsJSON: "{}",
+                timeoutSeconds: 8,
+                ifCurrentRoute: sourceRoute)
+            let selfResponse = try JSONDecoder().decode(UsersSelfAssignmentEnvelope.self, from: selfData)
+            let familyState = Self.connectedFamilyAgentState(
+                assignedAgentID: selfResponse.assignedAgentID,
+                agents: decoded.agents)
             let routingIdentity = OpenClawChatSessionRoutingIdentity(
                 scope: decoded.scope.value as? String,
                 mainSessionKey: decoded.mainkey,
@@ -1697,20 +1825,26 @@ final class NodeAppModel {
                 self.gatewaySessionScope = decoded.scope.value as? String
                 self.applyMainSessionKey(decoded.mainkey)
 
-                let selected = (self.selectedAgentId ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                if !selected.isEmpty,
-                   !decoded.agents.contains(where: { $0.id == selected && $0.isSelectableAgent })
-                {
-                    self.selectedAgentId = nil
-                    self.focusedChatSessionKey = nil
+                self.applyConnectedFamilyAgentState(familyState)
+                if !self.isConnectedFamilyAgentLocked {
+                    let selected = (self.selectedAgentId ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !selected.isEmpty,
+                       !decoded.agents.contains(where: { $0.id == selected && $0.isSelectableAgent })
+                    {
+                        self.selectedAgentId = nil
+                        self.focusedChatSessionKey = nil
+                    }
                 }
                 self.synchronizeTalkSessionKey()
             }
             if let routingIdentity {
                 await sourceStore.storeSessionRoutingIdentity(routingIdentity)
             }
+            await self.flushQueuedWatchMessagesIfAvailable(resetRetryBudget: false)
         } catch {
-            // Best-effort only.
+            self.blockConnectedFamilyAgentAccessIfCurrent(
+                sourceGatewayID: sourceGatewayID,
+                shouldApply: shouldApply)
         }
     }
 
@@ -1727,6 +1861,13 @@ final class NodeAppModel {
     }
 
     func setSelectedAgentId(_ agentId: String?) {
+        if self.isConnectedFamilyAgentLocked {
+            self.selectedAgentId = nil
+            if let stableID = GatewayStableIdentifier.exact(self.connectedGatewayID) {
+                GatewaySettingsStore.saveGatewaySelectedAgentId(stableID: stableID, agentId: nil)
+            }
+            return
+        }
         let trimmed = (agentId ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let nextSelectedAgentId = trimmed.isEmpty ? nil : trimmed
         let currentSelectedAgentId = self.selectedAgentId?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -3427,6 +3568,9 @@ extension NodeAppModel {
 extension NodeAppModel {
     var mainSessionKey: String {
         let base = SessionKey.normalizeMainKey(self.mainSessionBaseKey)
+        if let lockedFamilyAgentID = self.lockedFamilyAgentID {
+            return SessionKey.makeAgentSessionKey(agentId: lockedFamilyAgentID, baseKey: base)
+        }
         let agentId = (selectedAgentId ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let defaultId = (gatewayDefaultAgentId ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if agentId.isEmpty || (!defaultId.isEmpty && agentId == defaultId) { return base }
@@ -3435,7 +3579,8 @@ extension NodeAppModel {
 
     var chatSessionKey: String {
         if let focused = focusedChatSessionKey?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !focused.isEmpty
+           !focused.isEmpty,
+           self.scopedFamilyAgentSessionKey(focused) == focused
         {
             return focused
         }
@@ -3491,6 +3636,27 @@ extension NodeAppModel {
         self.newChatRequestID &+= 1
     }
 
+    func requestFamilyAgentChat(prompt: String) {
+        guard self.isConnectedFamilyAgentLocked else { return }
+        let normalized = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return }
+        self.focusedChatSessionKey = nil
+        self.nextFamilyAgentChatPromptID &+= 1
+        self.pendingFamilyAgentChatPrompt = FamilyAgentChatPrompt(
+            id: self.nextFamilyAgentChatPromptID,
+            text: normalized)
+        self.synchronizeTalkSessionKey()
+    }
+
+    func consumeFamilyAgentChatPrompt(_ promptID: Int) -> String? {
+        guard self.isConnectedFamilyAgentLocked,
+              let pendingFamilyAgentChatPrompt,
+              pendingFamilyAgentChatPrompt.id == promptID
+        else { return nil }
+        self.pendingFamilyAgentChatPrompt = nil
+        return pendingFamilyAgentChatPrompt.text
+    }
+
     func consumeNewChatRequest(_ requestID: Int) -> Bool {
         guard requestID != 0,
               requestID == self.newChatRequestID,
@@ -3510,9 +3676,16 @@ extension NodeAppModel {
     }
 
     func focusChatSession(_ sessionKey: String?) {
-        let trimmed = (sessionKey ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        self.focusedChatSessionKey = trimmed.isEmpty ? nil : trimmed
+        self.focusedChatSessionKey = self.scopedFamilyAgentSessionKey(sessionKey)
         self.synchronizeTalkSessionKey()
+    }
+
+    private func scopedFamilyAgentSessionKey(_ sessionKey: String?) -> String? {
+        let trimmed = (sessionKey ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        guard let lockedFamilyAgentID = self.lockedFamilyAgentID else { return trimmed }
+        guard let routedAgentID = SessionKey.agentId(from: trimmed) else { return trimmed }
+        return routedAgentID == lockedFamilyAgentID ? trimmed : nil
     }
 
     /// Session changes invalidate queued PTT admission before Talk cancels any
@@ -3536,6 +3709,10 @@ extension NodeAppModel {
     /// display fallback: a cold offline start must wait for persisted or
     /// gateway-provided ownership before it can queue durable work.
     var chatDeliveryAgentId: String? {
+        guard self.connectedFamilyAgentState.admitsAgentRouting else { return nil }
+        if let lockedFamilyAgentID = self.lockedFamilyAgentID {
+            return lockedFamilyAgentID.lowercased()
+        }
         if let sessionAgentId = SessionKey.agentId(from: chatSessionKey) {
             return sessionAgentId.lowercased()
         }
@@ -3569,6 +3746,9 @@ extension NodeAppModel {
     }
 
     private var selectedOrDefaultAgentId: String {
+        if let lockedFamilyAgentID = self.lockedFamilyAgentID {
+            return lockedFamilyAgentID
+        }
         let agentId = (selectedAgentId ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let defaultId = (gatewayDefaultAgentId ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         return agentId.isEmpty ? defaultId : agentId
@@ -3965,6 +4145,8 @@ extension NodeAppModel {
         self.gatewayAccentColorHex = nil
         self.gatewayDefaultAgentId = nil
         self.gatewayAgents = []
+        self.connectedFamilyAgentState = .disconnected
+        self.pendingFamilyAgentChatPrompt = nil
         self.selectedAgentId = GatewaySettingsStore.loadGatewaySelectedAgentId(stableID: stableID)
         // Session keys are gateway-owned: transport reconnects keep the active chat,
         // while initial connects and target changes must not inherit another route.
@@ -4461,7 +4643,7 @@ extension NodeAppModel {
         await self.refreshBrandingFromGateway(shouldApply: shouldContinue)
         guard shouldContinue() else { return }
         await self.refreshAgentsFromGateway(shouldApply: shouldContinue)
-        guard shouldContinue() else { return }
+        guard shouldContinue(), self.connectedFamilyAgentState.admitsAgentRouting else { return }
         await self.talkMode.reloadConfig(shouldApply: shouldContinue)
         guard shouldContinue() else { return }
         self.requestTalkPermissionUpgradeIfNeeded()
@@ -4620,6 +4802,7 @@ extension NodeAppModel {
                     allowStoredDeviceAuth: reconnectOptions.allowStoredDeviceAuth)
 
                 do {
+                    await FamilyInviteEdgeCredentials.refreshIfNeeded(for: url)
                     try await self.operatorGateway.connect(
                         url: url,
                         credentials: GatewayNodeSessionCredentials(
@@ -4629,7 +4812,9 @@ extension NodeAppModel {
                         connectOptions: operatorOptions,
                         sessionBox: sessionBox,
                         extraHeadersProvider: {
-                            GatewaySettingsStore.loadGatewayCustomHeaders(gatewayStableID: stableID)
+                            FamilyInviteEdgeCredentials.mergingUpgradeHeaders(
+                                GatewaySettingsStore.loadGatewayCustomHeaders(gatewayStableID: stableID),
+                                for: url)
                         },
                         onConnected: { [weak self] in
                             await self?.handleOperatorGatewayConnected(
@@ -4887,6 +5072,7 @@ extension NodeAppModel {
         GatewayDiagnostics.log("connect attempt epochMs=\(epochMs) url=\(context.url.absoluteString)")
 
         do {
+            await FamilyInviteEdgeCredentials.refreshIfNeeded(for: context.url)
             try await self.nodeGateway.connect(
                 url: context.url,
                 credentials: GatewayNodeSessionCredentials(
@@ -4896,7 +5082,9 @@ extension NodeAppModel {
                 connectOptions: connectedOptions,
                 sessionBox: context.sessionBox,
                 extraHeadersProvider: {
-                    GatewaySettingsStore.loadGatewayCustomHeaders(gatewayStableID: context.stableID)
+                    FamilyInviteEdgeCredentials.mergingUpgradeHeaders(
+                        GatewaySettingsStore.loadGatewayCustomHeaders(gatewayStableID: context.stableID),
+                        for: context.url)
                 },
                 onConnected: { [weak self] in
                     await self?.handleNodeGatewayConnected(
@@ -5227,6 +5415,9 @@ extension NodeAppModel {
         self.operatorConnected = connected
         if !connected {
             self.isDesktopObserveAvailable = false
+            self.applyConnectedFamilyAgentState(.disconnected)
+        } else if changed, !self.isLocalGatewayFixtureEnabled {
+            self.applyConnectedFamilyAgentState(.verifying)
         }
         self.operatorStatusText = connected ? "Connected" : "Offline"
         self.refreshOperatorAdminScopeFromStore()
@@ -5325,7 +5516,10 @@ extension NodeAppModel {
         self.nodeStatusText = "Connected"
     }
 
-    private func configureLocalGatewayFixtureSession(_ fixture: LocalChatFixture) {
+    private func configureLocalGatewayFixtureSession(
+        _ fixture: LocalChatFixture,
+        assignedAgentID: String? = nil)
+    {
         self.mainSessionBaseKey = "main"
         self.gatewaySessionScope = "per-sender"
         self.gatewayAccentColorHex = nil
@@ -5333,6 +5527,13 @@ extension NodeAppModel {
         self.gatewayDefaultAgentId = fixture.defaultAgentID
         self.gatewayAgents = fixture.agents
         self.focusedChatSessionKey = nil
+        if let assignedAgentID {
+            self.applyConnectedFamilyAgentState(Self.connectedFamilyAgentState(
+                assignedAgentID: assignedAgentID,
+                agents: fixture.agents))
+        } else {
+            self.connectedFamilyAgentState = .unrestricted
+        }
         self.synchronizeTalkSessionKey()
     }
 
@@ -5361,7 +5562,10 @@ extension NodeAppModel {
         self.gatewayConnected = true
         self.setOperatorConnected(true)
         self.hasOperatorAdminScope = true
-        self.configureLocalGatewayFixtureSession(.appScreenshots)
+        self.configureLocalGatewayFixtureSession(
+            .appScreenshots,
+            assignedAgentID: ConnectedFamilyAgentShellFixture.isEnabled(
+                arguments: ProcessInfo.processInfo.arguments) ? "main" : nil)
         self.talkMode.enterScreenshotFixtureMode()
     }
 }
@@ -6309,7 +6513,10 @@ extension NodeAppModel {
                         status: OpenClawWatchAppStatus(code: .chatConnectIPhone),
                         statusText: "Connect iPhone chat to read messages")
                 }
-                payload = try await IOSGatewayChatTransport(gateway: self.operatorSession, globalAgentId: agentID)
+                payload = try await IOSGatewayChatTransport(
+                    gateway: self.operatorSession,
+                    globalAgentId: agentID,
+                    lockedAgentId: self.lockedFamilyAgentID)
                     .requestHistory(sessionKey: sessionKey)
             }
 
@@ -6570,6 +6777,7 @@ extension NodeAppModel {
             journal: journal,
             gateway: self.operatorSession,
             messaging: self.watchMessagingService,
+            familyAgentState: { [weak self] in self?.connectedFamilyAgentState ?? .disconnected },
             reportStorageWarning: { [weak self] message in
                 self?.updateWatchChatStorageWarning(message, for: journal)
             })
@@ -9896,6 +10104,7 @@ extension NodeAppModel {
 
     func sendVoiceTranscript(text: String, sessionKey: String?) async throws {
         try Task.checkCancellation()
+        guard self.connectedFamilyAgentState.admitsAgentRouting else { throw CancellationError() }
         let routeGeneration = self.gatewayRouteGeneration
         let gatewayStableID = self.connectedGatewayID
         if await !self.isGatewayConnected() {
@@ -9910,7 +10119,8 @@ extension NodeAppModel {
                   generation: routeGeneration,
                   stableID: gatewayStableID)
         else { throw CancellationError() }
-        if let sessionKey, sessionKey != self.mainSessionKey {
+        let routedSessionKey = self.isConnectedFamilyAgentLocked ? self.mainSessionKey : sessionKey
+        if let routedSessionKey, routedSessionKey != self.mainSessionKey {
             throw CancellationError()
         }
         try Task.checkCancellation()
@@ -9918,7 +10128,7 @@ extension NodeAppModel {
             var text: String
             var sessionKey: String?
         }
-        let payload = Payload(text: text, sessionKey: sessionKey)
+        let payload = Payload(text: text, sessionKey: routedSessionKey)
         let data = try JSONEncoder().encode(payload)
         guard let json = String(bytes: data, encoding: .utf8) else {
             throw NSError(domain: "NodeAppModel", code: 1, userInfo: [
@@ -9949,6 +10159,12 @@ extension NodeAppModel {
             self.recordShareEvent(
                 "This browser sign-in link is for the OpenClaw Mac app. Use a device pairing link on iOS.")
         }
+    }
+
+    func handleFamilyInviteDeepLink(_ invite: FamilyInviteDeepLink) async {
+        guard let setupLink = await self.familyInviteEnrollment.enroll(invite) else { return }
+        self.stageGatewaySetupLink(setupLink)
+        self.familyInviteEnrollment.markHandoffComplete()
     }
 
     func stageGatewaySetupLink(_ link: GatewayConnectDeepLink) {
@@ -10023,20 +10239,34 @@ extension NodeAppModel {
         link: AgentDeepLink,
         expectedNodeRoute: GatewayNodeSessionRoute? = nil) async throws
     {
+        guard self.connectedFamilyAgentState.admitsAgentRouting else { throw CancellationError() }
         if link.message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             throw NSError(domain: "DeepLink", code: 1, userInfo: [
                 NSLocalizedDescriptionKey: "invalid agent message",
             ])
         }
 
+        let routedLink = if self.isConnectedFamilyAgentLocked {
+            AgentDeepLink(
+                message: link.message,
+                sessionKey: self.mainSessionKey,
+                thinking: link.thinking,
+                deliver: link.deliver,
+                to: link.to,
+                channel: link.channel,
+                timeoutSeconds: link.timeoutSeconds,
+                key: link.key)
+        } else {
+            link
+        }
         #if DEBUG
         if let testAgentRequestHandler {
-            try await testAgentRequestHandler(link)
+            try await testAgentRequestHandler(routedLink)
             return
         }
         #endif
 
-        let data = try JSONEncoder().encode(link)
+        let data = try JSONEncoder().encode(routedLink)
         guard let json = String(bytes: data, encoding: .utf8) else {
             throw NSError(domain: "NodeAppModel", code: 2, userInfo: [
                 NSLocalizedDescriptionKey: "Failed to encode agent request payload as UTF-8",
