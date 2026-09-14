@@ -117,6 +117,7 @@ struct SettingsProTab: View {
 
     private var settingsNavigationContent: some View {
         List {
+            self.familyAgentsSection
             self.gatewayDestination
             self.offlineDeviceSection
         }

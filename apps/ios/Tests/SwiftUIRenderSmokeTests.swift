@@ -77,6 +77,23 @@ struct SwiftUIRenderSmokeTests {
         }
     }
 
+    @Test @MainActor func `family agent draft builds in light and dark mode at accessible type sizes`() {
+        var windows: [UIWindow] = []
+        defer { windows.forEach { $0.isHidden = true } }
+
+        for scheme in [ColorScheme.light, ColorScheme.dark] {
+            for typeSize in [DynamicTypeSize.large, .accessibility2] {
+                let root = NavigationStack {
+                    FamilyAgentDraftScreen()
+                }
+                .environment(\.dynamicTypeSize, typeSize)
+                .preferredColorScheme(scheme)
+
+                windows.append(Self.host(root, size: CGSize(width: 320, height: 852)))
+            }
+        }
+    }
+
     @Test @MainActor func `display math builds valid and fallback view hierarchies`() {
         for typeSize in [DynamicTypeSize.large, .accessibility2] {
             let root = VStack {

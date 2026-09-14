@@ -26,7 +26,8 @@ struct SettingsHubScreen: View {
             isOperatorConnected: self.appModel.isOperatorGatewayConnected,
             hasOperatorAdminScope: self.appModel.hasOperatorAdminScope,
             isDemoMode: self.appModel.isAppleReviewDemoModeEnabled,
-            isScreenshotMode: ProcessInfo.processInfo.arguments.contains("--openclaw-screenshot-mode")),
+            isScreenshotMode: ProcessInfo.processInfo.arguments.contains("--openclaw-screenshot-mode") ||
+                FamilyAgentScreenshotMode.isEnabled(arguments: ProcessInfo.processInfo.arguments)),
             let url = AuthenticatedControlUI.pageURL(
                 config: config,
                 path: DashboardRouteMap.settingsPath,
@@ -46,6 +47,16 @@ struct SettingsHubScreen: View {
                 .toolbar {
                     if let headerSidebarAction {
                         OpenClawSidebarToolbarItem(action: headerSidebarAction, placement: .topBarLeading)
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            self.push(.familyAgents)
+                        } label: {
+                            Image(systemName: "person.2.badge.plus")
+                                .font(OpenClawType.subheadSemiBold)
+                        }
+                        .accessibilityLabel("Family Agents")
+                        .accessibilityIdentifier("SettingsHub.FamilyAgents")
                     }
                     ToolbarItem(placement: .topBarTrailing) {
                         Button {

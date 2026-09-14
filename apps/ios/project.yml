@@ -112,12 +112,16 @@ targets:
           swiftlint lint --strict --config "$SRCROOT/.swiftlint.yml" --use-script-input-file-lists
     settings:
       base:
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_APPICON_NAME: "$(OPENCLAW_APP_ICON_NAME)"
         CODE_SIGN_IDENTITY: "$(OPENCLAW_CODE_SIGN_IDENTITY)"
         CODE_SIGN_ENTITLEMENTS: "$(OPENCLAW_CODE_SIGN_ENTITLEMENTS)"
         CODE_SIGN_STYLE: "$(OPENCLAW_CODE_SIGN_STYLE)"
         DEVELOPMENT_TEAM: "$(OPENCLAW_DEVELOPMENT_TEAM)"
         OPENCLAW_ACTIVE_APP_GROUP_ID: "$(OPENCLAW_APP_GROUP_ID)"
+        OPENCLAW_APP_DISPLAY_NAME: OpenClaw
+        OPENCLAW_APP_ICON_NAME: AppIcon
+        OPENCLAW_FAMILY_PRODUCT: NO
+        OPENCLAW_FAMILY_RELAY_HOST: family-relay.example.invalid
         OPENCLAW_URL_SCHEME: openclaw
         PRODUCT_BUNDLE_IDENTIFIER: "$(OPENCLAW_APP_BUNDLE_ID)"
         PROVISIONING_PROFILE_SPECIFIER: "$(OPENCLAW_APP_PROFILE)"
@@ -147,7 +151,7 @@ targets:
     info:
       path: Sources/Info.plist
       properties:
-        CFBundleDisplayName: OpenClaw
+        CFBundleDisplayName: "$(OPENCLAW_APP_DISPLAY_NAME)"
         CFBundleIconName: "$(ASSETCATALOG_COMPILER_APPICON_NAME)"
         CFBundleURLTypes:
           - CFBundleURLName: ai.openclawfoundation.app
@@ -158,6 +162,7 @@ targets:
         OpenClawGitCommit: "$(OPENCLAW_GIT_COMMIT)"
         OpenClawBuildTimestamp: "$(OPENCLAW_BUILD_TIMESTAMP)"
         OpenClawAppGroupIdentifier: "$(OPENCLAW_ACTIVE_APP_GROUP_ID)"
+        OpenClawFamilyProduct: "$(OPENCLAW_FAMILY_PRODUCT)"
         CFBundleVersion: "$(OPENCLAW_BUILD_VERSION)"
         UILaunchScreen: {}
         UIApplicationSceneManifest:
@@ -201,6 +206,7 @@ targets:
           - JetBrainsMono-SemiBold.ttf
         OpenClawPushMode: "$(OPENCLAW_PUSH_MODE)"
         OpenClawPushRelayBaseURL: "$(OPENCLAW_PUSH_RELAY_BASE_URL)"
+        OpenClawFamilyRelayHost: "$(OPENCLAW_FAMILY_RELAY_HOST)"
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown
@@ -367,13 +373,14 @@ targets:
       ProvisioningStyle: "$(OPENCLAW_CODE_SIGN_STYLE)"
     settings:
       base:
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_APPICON_NAME: "$(OPENCLAW_APP_ICON_NAME)"
         CODE_SIGN_IDENTITY: "$(OPENCLAW_CODE_SIGN_IDENTITY)"
         CODE_SIGN_STYLE: "$(OPENCLAW_CODE_SIGN_STYLE)"
         DEVELOPMENT_TEAM: "$(OPENCLAW_DEVELOPMENT_TEAM)"
         ENABLE_APPINTENTS_METADATA: NO
         ENABLE_APP_INTENTS_METADATA_GENERATION: NO
         OPENCLAW_COMPANION_APP_BUNDLE_ID: "$(OPENCLAW_APP_BUNDLE_ID)"
+        OPENCLAW_WATCH_DISPLAY_NAME: OpenClaw
         PRODUCT_BUNDLE_IDENTIFIER: "$(OPENCLAW_WATCH_APP_BUNDLE_ID)"
         PROVISIONING_PROFILE_SPECIFIER: "$(OPENCLAW_WATCH_APP_PROFILE)"
         SWIFT_STRICT_CONCURRENCY: complete
@@ -392,7 +399,7 @@ targets:
     info:
       path: WatchApp/Info.plist
       properties:
-        CFBundleDisplayName: OpenClaw
+        CFBundleDisplayName: "$(OPENCLAW_WATCH_DISPLAY_NAME)"
         CFBundleShortVersionString: "$(OPENCLAW_MARKETING_VERSION)"
         CFBundleVersion: "$(OPENCLAW_BUILD_VERSION)"
         WKCompanionAppBundleIdentifier: "$(OPENCLAW_COMPANION_APP_BUNDLE_ID)"

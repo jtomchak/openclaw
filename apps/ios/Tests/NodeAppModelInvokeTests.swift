@@ -1356,6 +1356,92 @@ private final class TimingOutDeviceStatusService: DeviceStatusServicing {
         #expect(appModel.chatViewModelIdentityID != selectedIdentity)
     }
 
+    @Test @MainActor func `family assignment resolves only one exact selectable roster match`() {
+        let agents = LocalChatFixture.appScreenshots.agents
+
+        #expect(NodeAppModel.connectedFamilyAgentState(
+            assignedAgentID: nil,
+            agents: agents) == .unrestricted)
+        #expect(NodeAppModel.connectedFamilyAgentState(
+            assignedAgentID: "main",
+            agents: agents) == .locked(agentID: "main"))
+        #expect(NodeAppModel.connectedFamilyAgentState(
+            assignedAgentID: " Main ",
+            agents: agents) == .blocked)
+        #expect(NodeAppModel.connectedFamilyAgentState(
+            assignedAgentID: "missing",
+            agents: agents) == .blocked)
+        #expect(NodeAppModel.connectedFamilyAgentState(
+            assignedAgentID: " ",
+            agents: agents) == .blocked)
+        #expect(NodeAppModel.connectedFamilyAgentState(
+            assignedAgentID: "main",
+            agents: [agents[0], agents[0]]) == .blocked)
+    }
+
+    @Test @MainActor func `locked family assignment owns selection sessions prompts and disconnect`() throws {
+        let appModel = NodeAppModel()
+        appModel.gatewayDefaultAgentId = "main"
+        appModel.gatewayAgents = LocalChatFixture.appScreenshots.agents
+        appModel.setSelectedAgentId("research")
+        appModel.focusChatSession("agent:research:existing")
+
+        appModel.applyConnectedFamilyAgentState(.locked(agentID: "main"))
+
+        #expect(appModel.selectedAgentId == nil)
+        #expect(appModel.mainSessionKey == "agent:main:main")
+        #expect(appModel.chatSessionKey == "agent:main:main")
+        #expect(appModel.chatDeliveryAgentId == "main")
+
+        appModel.setSelectedAgentId("automation")
+        appModel.focusChatSession("agent:automation:foreign")
+        #expect(appModel.selectedAgentId == nil)
+        #expect(appModel.chatSessionKey == "agent:main:main")
+
+        appModel.focusChatSession("agent:main:family-thread")
+        #expect(appModel.chatSessionKey == "agent:main:family-thread")
+
+        appModel.requestFamilyAgentChat(prompt: "  Help me plan this week.  ")
+        let prompt = try #require(appModel.pendingFamilyAgentChatPrompt)
+        #expect(prompt.text == "Help me plan this week.")
+        #expect(appModel.chatSessionKey == "agent:main:main")
+        #expect(appModel.consumeFamilyAgentChatPrompt(prompt.id) == "Help me plan this week.")
+        #expect(appModel.pendingFamilyAgentChatPrompt == nil)
+
+        appModel.setOperatorConnected(false)
+        #expect(appModel.connectedFamilyAgentState == .disconnected)
+        #expect(appModel.lockedFamilyAgentID == nil)
+    }
+
+    @Test @MainActor func `assignment verification preserves focused chat until resolution`() {
+        let appModel = NodeAppModel()
+        appModel.applyConnectedFamilyAgentState(.unrestricted)
+        appModel.focusChatSession("agent:family:side-chat")
+
+        appModel.applyConnectedFamilyAgentState(.verifying)
+
+        #expect(appModel.chatSessionKey == "agent:family:side-chat")
+        #expect(appModel.chatDeliveryAgentId == nil)
+
+        appModel.applyConnectedFamilyAgentState(.locked(agentID: "family"))
+
+        #expect(appModel.chatSessionKey == "agent:family:side-chat")
+        #expect(appModel.chatDeliveryAgentId == "family")
+    }
+
+    @Test @MainActor func `unverified family access never admits a chat prompt`() {
+        let appModel = NodeAppModel()
+
+        appModel.applyConnectedFamilyAgentState(.verifying)
+        appModel.requestFamilyAgentChat(prompt: "Do not send")
+        #expect(appModel.pendingFamilyAgentChatPrompt == nil)
+
+        appModel.applyConnectedFamilyAgentState(.blocked)
+        appModel.requestFamilyAgentChat(prompt: "Still do not send")
+        #expect(appModel.pendingFamilyAgentChatPrompt == nil)
+        #expect(appModel.connectedFamilyAgentState.requiresRestrictedShell)
+    }
+
     @Test @MainActor func `init preserves saved talk mode preference`() {
         withUserDefaults(["talk.enabled": true]) {
             let talkMode = TalkModeManager(allowSimulatorCapture: true)
@@ -8734,6 +8820,21 @@ private final class TimingOutDeviceStatusService: DeviceStatusServicing {
         #expect(appModel.pendingAgentDeepLinkPrompt == nil)
         #expect(appModel.openChatRequestID == 1)
         #expect(appModel.lastShareEventText.contains("Sent to gateway"))
+    }
+
+    @Test @MainActor func `family lock scopes trusted deep links to the assigned agent`() async {
+        let appModel = NodeAppModel()
+        appModel.gatewayConnected = true
+        appModel.gatewayDefaultAgentId = "research"
+        appModel.applyConnectedFamilyAgentState(.locked(agentID: "main"))
+        var captured: AgentDeepLink?
+        appModel.testAgentRequestHandler = { link in captured = link }
+
+        await appModel.handleDeepLink(url: makeAgentDeepLinkURL(
+            message: "trusted family request",
+            key: NodeAppModel.expectedDeepLinkKey()))
+
+        #expect(captured?.sessionKey == "agent:main:main")
     }
 
     @Test @MainActor func `operator scopes use the active gateway token`() throws {

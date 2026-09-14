@@ -45,6 +45,20 @@ struct SettingsHubTests {
         }
     }
 
+    @Test func `family agents is reachable from Dashboard and fallback Settings`() throws {
+        let settingsHub = try String(
+            contentsOf: Self.sourceURL("Settings/SettingsHubScreen.swift"),
+            encoding: .utf8)
+        let settingsSections = try String(
+            contentsOf: Self.sourceURL("Design/SettingsProTabSections.swift"),
+            encoding: .utf8)
+
+        #expect(settingsHub.contains("self.push(.familyAgents)"))
+        #expect(settingsHub.contains("SettingsHub.FamilyAgents"))
+        #expect(settingsSections.contains("route: .familyAgents"))
+        #expect(settingsSections.contains("settings-family-agents-row"))
+    }
+
     @Test(arguments: [false, true], [false, true])
     func `loaded settings require both embed support and an admitted status request`(
         hasEmbedMarker: Bool,
@@ -165,6 +179,15 @@ struct SettingsHubTests {
 
         try await waitForDashboardCondition { !compatibility.needsGatewayUpgrade }
         #expect(!compatibility.needsGatewayUpgrade)
+    }
+}
+
+extension SettingsHubTests {
+    fileprivate static func sourceURL(_ relativePath: String) -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/\(relativePath)")
     }
 }
 
