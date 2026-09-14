@@ -14,6 +14,10 @@ import {
   recordPairedNodeConnection,
 } from "../../../infra/device-pairing-node.js";
 import { getGatewaySuspendAdmissionPhase } from "../../../process/gateway-work-admission.js";
+import {
+  bindAgentInvitationDevice,
+  readAgentInvitationBySetupId,
+} from "../../../state/agent-invitations.js";
 import { hasMultipleSessionSharingIdentities } from "../../../state/user-profiles.js";
 import { resolveRuntimeServiceBuildId, resolveRuntimeServiceVersion } from "../../../version.js";
 import { resolveChatAttachmentPolicy } from "../../chat-attachment-policy.js";
@@ -227,6 +231,23 @@ export async function sendGatewayHello(
             return;
           }
           bootstrapHandoff = consumed;
+          if (
+            consumed.completion &&
+            devicePublicKey &&
+            readAgentInvitationBySetupId(consumed.completion.setupId)
+          ) {
+            const bound = bindAgentInvitationDevice({
+              setupId: consumed.completion.setupId,
+              deviceId: device.id,
+              gatewayPublicKey: devicePublicKey,
+            });
+            if (!bound && consumed.record.setupId) {
+              await releasePendingNodePairingCleanup();
+              setCloseCause("agent-invitation-bind-failed");
+              close();
+              return;
+            }
+          }
         }
       }
     } catch (err) {

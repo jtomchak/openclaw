@@ -77,6 +77,25 @@ export interface AgentDeletionJournal {
   workspace_dir: string;
 }
 
+export interface AgentInvitations {
+  agent_id: string;
+  created_at_ms: number;
+  device_id: string | null;
+  display_name: string | null;
+  enrollment_key_thumbprint: string | null;
+  expires_at_ms: number;
+  gateway_public_key: string | null;
+  invitation_id: string;
+  profile_id: string | null;
+  redeemed_at_ms: number | null;
+  revoked_at_ms: number | null;
+  role_name: string;
+  setup_id: string | null;
+  state: string;
+  token_hash: string;
+  updated_at_ms: number;
+}
+
 export interface AgentProvenance {
   agent_id: string;
   created_at_ms: number;
@@ -1737,6 +1756,7 @@ export interface DB {
   agent_database_leases: AgentDatabaseLeases;
   agent_databases: AgentDatabases;
   agent_deletion_journal: AgentDeletionJournal;
+  agent_invitations: AgentInvitations;
   agent_provenance: AgentProvenance;
   apns_registration_tombstones: ApnsRegistrationTombstones;
   apns_registrations: ApnsRegistrations;

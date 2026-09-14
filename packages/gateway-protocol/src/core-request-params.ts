@@ -1,4 +1,5 @@
 import type { Static } from "typebox";
+import type * as AgentInvitationSchema from "./schema/agent-invitations.js";
 import type * as AgentSchema from "./schema/agent.js";
 import type * as BoardSchema from "./schema/board.js";
 import type { CanvasDocumentPreviewParams, CanvasDocumentViewParams } from "./schema/canvas.js";
@@ -13,6 +14,10 @@ import type * as UsersSchema from "./schema/users.js";
 
 /** Schema-derived payload ownership for statically validated core Gateway methods. */
 export type GatewayCoreRequestParams = {
+  "agent.invitations.create": AgentInvitationSchema.AgentInvitationsCreateParams;
+  "agent.invitations.redeem": AgentInvitationSchema.AgentInvitationsRedeemParams;
+  "agent.invitations.revoke": AgentInvitationSchema.AgentInvitationsRevokeParams;
+  "agent.invitations.status": AgentInvitationSchema.AgentInvitationsStatusParams;
   "canvas.document.preview": CanvasDocumentPreviewParams;
   "canvas.document.view": CanvasDocumentViewParams;
   "board.action": BoardSchema.BoardActionParams;

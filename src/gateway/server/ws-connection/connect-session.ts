@@ -22,6 +22,7 @@ import {
   isEphemeralGatewayClient,
 } from "../../../utils/message-channel.js";
 import { resolveRuntimeServiceBuildId, resolveRuntimeServiceVersion } from "../../../version.js";
+import { resolveAgentInvitationForGatewayConnect } from "../../agent-invitation-connect.js";
 import { verifyAgentRuntimeIdentityToken } from "../../agent-runtime-identity-token.js";
 import { buildAuthenticatedPresenceUser } from "../../authenticated-presence-user.js";
 import { shouldUseGatewayOwnerProfile } from "../../gateway-owner-profile.js";
@@ -124,6 +125,7 @@ export async function attachAuthenticatedGatewayConnect(
     device,
     devicePublicKey,
     deviceToken,
+    bootstrapTokenCandidate,
     authResult,
     authMethod,
     pairingLocality,
@@ -202,10 +204,41 @@ export async function attachAuthenticatedGatewayConnect(
   const ownerProfileExpected =
     shouldTrackPresence &&
     shouldUseGatewayOwnerProfile({ role, authenticatedUserId, authMethod, rolesConfigured });
-  let authenticatedUserProfile: GatewayWsClient["authenticatedUserProfile"];
+  // Invitation revocation is a device boundary, not only a user-profile boundary.
+  // A revoked device must not retain access if best-effort pairing cleanup failed.
+  const invitationResolution =
+    (role === "operator" || role === "node") && device?.id && devicePublicKey
+      ? await resolveAgentInvitationForGatewayConnect({
+          cfg: context.configSnapshot,
+          authMethod,
+          ...(bootstrapTokenCandidate ? { bootstrapToken: bootstrapTokenCandidate } : {}),
+          deviceId: device.id,
+          gatewayPublicKey: devicePublicKey,
+        })
+      : { kind: "not-invited" as const };
+  if (invitationResolution.kind === "denied") {
+    const message = "invited device access is no longer authorized";
+    markHandshakeFailure("agent-invitation-denied", { deviceId: device?.id });
+    sendHandshakeErrorResponse(ErrorCodes.FORBIDDEN, message);
+    await releasePendingNodePairingCleanup();
+    close(1008, message);
+    return;
+  }
+  const agentInvitation =
+    role === "operator" && invitationResolution.kind === "allowed"
+      ? invitationResolution.invitation
+      : null;
+  let authenticatedUserProfile: GatewayWsClient["authenticatedUserProfile"] =
+    agentInvitation?.profileId
+      ? resolveAuthenticatedProfile(
+          agentInvitation.profileId,
+          agentInvitation.redeemedAtMs ?? agentInvitation.createdAtMs,
+        )
+      : undefined;
   if (
-    ownerProfileExpected ||
-    (authenticatedUserId && (!resolveAuthenticatedGitHubIdentity || rolesConfigured))
+    !authenticatedUserProfile &&
+    (ownerProfileExpected ||
+      (authenticatedUserId && (!resolveAuthenticatedGitHubIdentity || rolesConfigured)))
   ) {
     try {
       // The live profile callback refreshes edits and detached provider-avatar adoption.
@@ -396,7 +429,8 @@ export async function attachAuthenticatedGatewayConnect(
   const prepareLocalUserIngress = (profile = authenticatedUserProfile) =>
     prepareGatewayLocalUserIngress({
       authMethod,
-      authenticatedUserExpected: Boolean(authenticatedUserId) || ownerProfileExpected,
+      authenticatedUserExpected:
+        Boolean(authenticatedUserId) || ownerProfileExpected || Boolean(agentInvitation),
       ...(profile
         ? {
             profile: {
