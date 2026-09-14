@@ -279,6 +279,27 @@ struct IOSGatewayChatTransportTests {
         #expect(IOSGatewayChatTransport.composerAgentID(for: canonical) == "ops")
     }
 
+    @Test func `locked family transport rewrites every session target to the assigned agent`() throws {
+        let transport = IOSGatewayChatTransport(
+            gateway: GatewayNodeSession(),
+            globalAgentId: "main",
+            lockedAgentId: "family")
+
+        #expect(transport.sessionTarget(for: "main") == .init(
+            sessionKey: "agent:family:main",
+            agentID: nil))
+        #expect(transport.sessionTarget(
+            for: "agent:other:private-thread",
+            overrideAgentID: "other") == .init(
+            sessionKey: "agent:family:private-thread",
+            agentID: "family"))
+        #expect(transport.sessionTarget(for: "global", overrideAgentID: "other") == .init(
+            sessionKey: "global",
+            agentID: "family"))
+        let scoped = try #require(transport.scoped(toAgentID: "other") as? IOSGatewayChatTransport)
+        #expect(scoped.chatGatewayAgentID == "family")
+    }
+
     @Test func `composer skill projection keeps agent filtering session enableable`() {
         let skill = SkillStatus(
             name: "Weather",

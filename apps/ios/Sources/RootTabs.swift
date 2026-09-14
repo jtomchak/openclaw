@@ -63,6 +63,8 @@ struct RootTabs: View {
         let resolvedVisibility = initialSidebarVisibility ?? Self.initialSidebarVisibility
         _isSidebarVisible = State(initialValue: resolvedVisibility ?? false)
         _sidebarVisibilityUserOverridden = State(initialValue: resolvedVisibility != nil)
+        _sidebarNavigationPath = State(initialValue: Self.initialSettingsPath(
+            arguments: ProcessInfo.processInfo.arguments))
     }
 
     private static var initialSidebarDestination: SidebarDestination {
@@ -70,6 +72,9 @@ struct RootTabs: View {
     }
 
     static func initialDestination(arguments: [String]) -> SidebarDestination {
+        if FamilyAgentScreenshotMode.isEnabled(arguments: arguments) {
+            return .settings
+        }
         if let requested = self.requestedInitialSidebarDestination(arguments: arguments) {
             return requested
         }
@@ -83,6 +88,10 @@ struct RootTabs: View {
         case "settings": .settings
         default: .chat
         }
+    }
+
+    static func initialSettingsPath(arguments: [String]) -> [SettingsRoute] {
+        FamilyAgentScreenshotMode.isEnabled(arguments: arguments) ? [.familyAgents] : []
     }
 
     static func requestedInitialSidebarDestination(arguments: [String]) -> SidebarDestination? {
@@ -129,11 +138,30 @@ struct RootTabs: View {
         self.rootPresentation(
             self.rootLifecycle(
                 self.rootOverlays(
-                    self.sidebarSplitContent
+                    self.rootContent
                         .tint(OpenClawBrand.accent))))
+            .sheet(isPresented: Binding(
+                get: { self.appModel.familyInviteEnrollment.isPresented },
+                set: { presented in
+                    if !presented { self.appModel.familyInviteEnrollment.dismiss() }
+                })) {
+                    FamilyInviteEnrollmentView(coordinator: self.appModel.familyInviteEnrollment)
+            }
             .overlay(alignment: .topLeading) {
                 self.uiTestReadinessMarker
             }
+    }
+
+    @ViewBuilder
+    private var rootContent: some View {
+        switch self.appModel.connectedFamilyAgentState {
+        case .locked:
+            ConnectedFamilyAgentShell()
+        case .verifying, .blocked:
+            ConnectedFamilyAgentAccessGate(state: self.appModel.connectedFamilyAgentState)
+        case .disconnected, .unrestricted:
+            self.sidebarSplitContent
+        }
     }
 
     @ViewBuilder

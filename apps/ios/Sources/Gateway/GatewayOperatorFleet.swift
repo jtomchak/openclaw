@@ -107,6 +107,7 @@ final class GatewayOperatorFleet {
         var attempt = 0
         while !Task.isCancelled, self.runtimes[key]?.id == runtime.id {
             do {
+                await FamilyInviteEdgeCredentials.refreshIfNeeded(for: config.url)
                 try await runtime.session.connect(
                     url: config.url,
                     credentials: GatewayNodeSessionCredentials(
@@ -116,8 +117,10 @@ final class GatewayOperatorFleet {
                     connectOptions: options,
                     sessionBox: sessionBox,
                     extraHeadersProvider: {
-                        GatewaySettingsStore.loadGatewayCustomHeaders(
-                            gatewayStableID: config.effectiveStableID)
+                        FamilyInviteEdgeCredentials.mergingUpgradeHeaders(
+                            GatewaySettingsStore.loadGatewayCustomHeaders(
+                                gatewayStableID: config.effectiveStableID),
+                            for: config.url)
                     },
                     onConnected: { [weak self] in
                         await MainActor.run {

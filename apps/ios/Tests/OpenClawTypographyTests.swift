@@ -40,6 +40,18 @@ struct OpenClawTypographyTests {
         #expect(commandCenter.contains(".font(OpenClawType.captionMedium)"))
     }
 
+    @Test func `family invite enrollment uses branded accessible typography`() throws {
+        let source = try String(
+            contentsOf: Self.sourceURL("Onboarding/FamilyInviteEnrollmentView.swift"),
+            encoding: .utf8)
+
+        #expect(source.contains("OpenClawType.title2"))
+        #expect(source.contains("OpenClawType.body"))
+        #expect(source.contains("OpenClawType.subheadSemiBold"))
+        #expect(source.contains("accessibilityLabel(Text(\"Enrollment in progress\"))"))
+        #expect(source.contains("accessibilityIdentifier(\"FamilyInvite.Enrollment\")"))
+    }
+
     @Test func `bundled fonts load from app bundle`() {
         for name in OpenClawType.registeredPostScriptNames {
             #expect(UIFont(name: name, size: 12) != nil, "Missing bundled font: \(name)")
@@ -359,6 +371,16 @@ struct OpenClawTypographyTests {
             "Font.custom(self.macMonospacedSystemFontName(size: size), size: size, relativeTo: textStyle)"))
         #expect(!chatTypography.contains("Font.system(textStyle, design: .default)"))
         #expect(!chatTypography.contains("Font.system(textStyle, design: .monospaced)"))
+    }
+
+    @Test func `family agent draft uses branded typography`() throws {
+        let source = try String(
+            contentsOf: Self.sourceURL("Settings/FamilyAgentDraftScreen.swift"),
+            encoding: .utf8)
+
+        #expect(source.contains(".font(OpenClawType.title3SemiBold)"))
+        #expect(source.contains(".font(OpenClawType.subheadSemiBold)"))
+        #expect(source.contains(".font(OpenClawType.caption)"))
     }
 
     @Test func `chat model menu uses branded typography`() throws {

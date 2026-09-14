@@ -19,6 +19,32 @@ private func gatewayLink(from raw: String) -> GatewayConnectDeepLink? {
 }
 
 @Suite struct DeepLinksSecurityTests {
+    @Test func agentInviteAcceptsOnlyConfiguredHTTPSOriginAndFragmentToken() throws {
+        let link = try FamilyInviteDeepLink(
+            url: #require(URL(string: "https://relay.example.invalid/agent/invite#abc_DEF-123")),
+            allowedHosts: ["relay.example.invalid"])
+
+        #expect(link?.relayBaseURL.absoluteString == "https://relay.example.invalid")
+        #expect(link?.inviteToken == "abc_DEF-123")
+    }
+
+    @Test(arguments: [
+        "https://other.example.invalid/agent/invite#abc_DEF-123",
+        "http://relay.example.invalid/agent/invite#abc_DEF-123",
+        "https://relay.example.invalid:443/agent/invite#abc_DEF-123",
+        "https://user@relay.example.invalid/agent/invite#abc_DEF-123",
+        "https://relay.example.invalid/agent/invite?token=abc_DEF-123",
+        "https://relay.example.invalid/agent/invite?source=mail#abc_DEF-123",
+        "https://relay.example.invalid/agent/invite/extra#abc_DEF-123",
+        "https://relay.example.invalid/agent/invite",
+        "https://relay.example.invalid/agent/invite#contains%20space",
+    ])
+    func agentInviteRejectsUntrustedOrAmbiguousURLs(raw: String) throws {
+        #expect(try FamilyInviteDeepLink(
+            url: #require(URL(string: raw)),
+            allowedHosts: ["relay.example.invalid"]) == nil)
+    }
+
     @Test func setupResultInitializerDefaultsOptionalFields() {
         let result = DevicePairSetupCodeResult(
             setupid: "setup-1",

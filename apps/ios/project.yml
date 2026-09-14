@@ -118,6 +118,7 @@ targets:
         CODE_SIGN_STYLE: "$(OPENCLAW_CODE_SIGN_STYLE)"
         DEVELOPMENT_TEAM: "$(OPENCLAW_DEVELOPMENT_TEAM)"
         OPENCLAW_ACTIVE_APP_GROUP_ID: "$(OPENCLAW_APP_GROUP_ID)"
+        OPENCLAW_FAMILY_RELAY_HOST: family-relay.example.invalid
         OPENCLAW_URL_SCHEME: openclaw
         PRODUCT_BUNDLE_IDENTIFIER: "$(OPENCLAW_APP_BUNDLE_ID)"
         PROVISIONING_PROFILE_SPECIFIER: "$(OPENCLAW_APP_PROFILE)"
@@ -201,6 +202,7 @@ targets:
           - JetBrainsMono-SemiBold.ttf
         OpenClawPushMode: "$(OPENCLAW_PUSH_MODE)"
         OpenClawPushRelayBaseURL: "$(OPENCLAW_PUSH_RELAY_BASE_URL)"
+        OpenClawFamilyRelayHost: "$(OPENCLAW_FAMILY_RELAY_HOST)"
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown
