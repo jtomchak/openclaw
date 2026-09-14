@@ -1470,7 +1470,7 @@ describe("attachGatewayWsMessageHandler post-connect health refresh", () => {
             definitions: {
               guest: {
                 sessions: { others: "view" as const },
-                agents: "*" as const,
+                agents: ["assigned"] as const,
                 scopes: ["operator.read" as const],
               },
             },
@@ -1511,6 +1511,7 @@ describe("attachGatewayWsMessageHandler post-connect health refresh", () => {
         expect(harness.client).toMatchObject({
           connect: { scopes: ["operator.read"] },
           authenticatedUserProfile: { profileId: canonical.id },
+          internal: { assignedAgentId: "assigned" },
         });
         expect(harness.socketSend).toHaveBeenCalled();
       });

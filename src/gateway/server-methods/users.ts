@@ -109,7 +109,10 @@ export const usersHandlers: GatewayRequestHandlers = {
         respond(false, undefined, authenticatedProfileUnavailableError());
         return;
       }
-      respond(true, { profile: getUserProfileListItem(profileId) });
+      respond(true, {
+        profile: getUserProfileListItem(profileId),
+        assignedAgentId: client.internal?.assignedAgentId ?? null,
+      });
     } catch (error) {
       respond(false, undefined, profileError(error));
     }

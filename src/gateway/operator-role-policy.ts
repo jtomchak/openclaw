@@ -160,6 +160,18 @@ export function hasOperatorBoundary(client: GatewayClient | null, cfg: OpenClawC
   return operatorSessionCap(client, cfg) !== undefined;
 }
 
+/** Only a non-admin singleton role represents an agent-bound human identity. */
+export function resolveAssignedAgentId(
+  role: GatewayOperatorRoleDefinition | undefined,
+): string | null {
+  return role &&
+    role.agents !== "*" &&
+    role.agents.length === 1 &&
+    !role.scopes.includes("operator.admin")
+    ? role.agents[0]
+    : null;
+}
+
 /** Enforces the owning agent ceiling for session creation and run-start targets. */
 export function authorizeGatewaySessionCreation(
   params: GatewaySessionAgentAuthorization,
@@ -172,6 +184,22 @@ export function authorizeGatewaySessionCreation(
   }
   const profileId = actor?.profileId ?? params.profileId;
   const role = resolveOperatorRolePolicyForProfile(profileId, params.cfg);
+  const connectedAssignment = "client" in params ? params.client?.internal?.assignedAgentId : null;
+  if (connectedAssignment) {
+    const currentAssignment = resolveAssignedAgentId(role);
+    if (currentAssignment !== connectedAssignment) {
+      return errorShape(
+        ErrorCodes.FORBIDDEN,
+        "Your assigned agent authorization changed; reconnect before creating a session.",
+      );
+    }
+    if (params.agentId !== connectedAssignment) {
+      return errorShape(
+        ErrorCodes.FORBIDDEN,
+        `Your connection is assigned to agent "${connectedAssignment}" and cannot create sessions for agent "${params.agentId}".`,
+      );
+    }
+  }
   if (!role || role.agents === "*" || role.agents.includes(params.agentId)) {
     return undefined;
   }
