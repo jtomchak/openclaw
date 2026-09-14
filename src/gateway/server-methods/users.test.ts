@@ -1,6 +1,7 @@
 import { expectDefined } from "@openclaw/normalization-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  GATEWAY_OWNER_PROFILE_ID,
   validateUsersLinkEmailResult,
   validateUsersSelfResult,
   validateUsersSetAvatarResult,
@@ -17,6 +18,7 @@ const setDisplayName = vi.hoisted(() => vi.fn());
 const setUserProfileRole = vi.hoisted(() => vi.fn());
 const invalidateOperatorRolePolicy = vi.hoisted(() => vi.fn());
 const ensureProfileForEmail = vi.hoisted(() => vi.fn());
+const getUserProfileRole = vi.hoisted(() => vi.fn());
 const getUserProfileDisplay = vi.hoisted(() => vi.fn());
 const getUserProfileListItem = vi.hoisted(() => vi.fn());
 const resolveUserProfileId = vi.hoisted(() => vi.fn());
@@ -29,6 +31,7 @@ vi.mock("../../state/user-profiles.js", async () => {
     ensureProfileForEmail,
     getUserProfileDisplay,
     getUserProfileListItem,
+    getUserProfileRole,
     linkEmail,
     listProfiles,
     resolveUserProfileId,
@@ -39,13 +42,16 @@ vi.mock("../../state/user-profiles.js", async () => {
   };
 });
 
-vi.mock("../operator-role-policy.js", () => ({ invalidateOperatorRolePolicy }));
+vi.mock("../operator-role-policy.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../operator-role-policy.js")>()),
+  invalidateOperatorRolePolicy,
+}));
 
 async function runUsersHandler(
   method: keyof typeof usersHandlers,
   params: object,
   client?: object,
-  context: object = {},
+  context: object = { getRuntimeConfig: () => ({}) },
 ) {
   const respond = vi.fn();
   await expectDefined(
@@ -84,6 +90,7 @@ describe("users gateway methods", () => {
     setDisplayName.mockReset();
     setUserProfileRole.mockReset();
     invalidateOperatorRolePolicy.mockReset();
+    getUserProfileRole.mockReset().mockReturnValue(null);
     getUserProfileListItem.mockReturnValue(profile);
     getUserProfileDisplay.mockReturnValue({
       id: profile.id,
@@ -167,13 +174,102 @@ describe("users gateway methods", () => {
     const first = await runUsersHandler("users.self", {}, selfClient);
     const second = await runUsersHandler("users.self", {}, selfClient);
 
-    expect(first).toHaveBeenCalledWith(true, { profile });
-    expect(second).toHaveBeenCalledWith(true, { profile });
+    expect(first).toHaveBeenCalledWith(true, { profile, assignedAgentId: null });
+    expect(second).toHaveBeenCalledWith(true, { profile, assignedAgentId: null });
     expect(validateUsersSelfResult(first.mock.calls[0]?.[1])).toBe(true);
     expect(ensureProfileForEmail).toHaveBeenNthCalledWith(1, "ada@example.com");
     expect(ensureProfileForEmail).toHaveBeenNthCalledWith(2, "ada@example.com");
     expect(getUserProfileListItem).toHaveBeenNthCalledWith(1, profile.id);
     expect(getUserProfileListItem).toHaveBeenNthCalledWith(2, profile.id);
+  });
+
+  it.each([
+    {
+      name: "one allowed agent",
+      profileId: "profile-single-agent",
+      role: {
+        sessions: { others: "none" },
+        agents: ["family"],
+        scopes: ["operator.read", "operator.write"],
+      },
+      assignedAgentId: "family",
+    },
+    {
+      name: "administrator",
+      profileId: "profile-administrator",
+      role: {
+        sessions: { others: "write" },
+        agents: ["family"],
+        scopes: ["operator.admin"],
+      },
+      assignedAgentId: null,
+    },
+    {
+      name: "unbounded agent access",
+      profileId: "profile-unbounded",
+      role: {
+        sessions: { others: "write" },
+        agents: "*",
+        scopes: ["operator.read", "operator.write"],
+      },
+      assignedAgentId: null,
+    },
+    {
+      name: "multiple allowed agents",
+      profileId: "profile-multiple-agents",
+      role: {
+        sessions: { others: "none" },
+        agents: ["family", "research"],
+        scopes: ["operator.read", "operator.write"],
+      },
+      assignedAgentId: null,
+    },
+    {
+      name: "no allowed agents",
+      profileId: "profile-no-agents",
+      role: {
+        sessions: { others: "none" },
+        agents: [],
+        scopes: ["operator.read"],
+      },
+      assignedAgentId: null,
+    },
+    {
+      name: "Gateway owner",
+      profileId: GATEWAY_OWNER_PROFILE_ID,
+      role: {
+        sessions: { others: "none" },
+        agents: ["family"],
+        scopes: ["operator.read"],
+      },
+      assignedAgentId: null,
+    },
+  ])("returns the effective $name assignment", async ({ profileId, role, assignedAgentId }) => {
+    const config = {
+      gateway: { roles: { default: "family", definitions: { family: role } } },
+    };
+    getUserProfileRole.mockReturnValue("family");
+    ensureProfileForEmail.mockReturnValue({ id: profileId });
+    getUserProfileListItem.mockReturnValue({ ...profile, id: profileId });
+
+    const respond = await runUsersHandler("users.self", {}, selfClient, {
+      getRuntimeConfig: () => config,
+    });
+
+    const result = { profile: { ...profile, id: profileId }, assignedAgentId };
+    expect(respond).toHaveBeenCalledWith(true, result);
+    expect(validateUsersSelfResult(result)).toBe(true);
+    if (profileId === GATEWAY_OWNER_PROFILE_ID) {
+      expect(getUserProfileRole).not.toHaveBeenCalled();
+    } else {
+      expect(getUserProfileRole).toHaveBeenCalledWith(profileId);
+    }
+  });
+
+  it("requires an explicit nullable users.self assignment", () => {
+    expect(validateUsersSelfResult({ profile, assignedAgentId: null })).toBe(true);
+    expect(validateUsersSelfResult({ profile, assignedAgentId: "family" })).toBe(true);
+    expect(validateUsersSelfResult({ profile })).toBe(false);
   });
 
   function connectedProfileClient(kind: string) {
@@ -200,7 +296,10 @@ describe("users gateway methods", () => {
 
       const respond = await runUsersHandler("users.self", {}, providerClient);
 
-      expect(respond).toHaveBeenCalledWith(true, { profile: { ...profile, emails: [] } });
+      expect(respond).toHaveBeenCalledWith(true, {
+        profile: { ...profile, emails: [] },
+        assignedAgentId: null,
+      });
       expect(ensureProfileForEmail).not.toHaveBeenCalled();
     },
   );
@@ -237,7 +336,7 @@ describe("users gateway methods", () => {
     expect(getUserProfileListItem).not.toHaveBeenCalled();
     finishSync?.();
     const respond = await pending;
-    expect(respond).toHaveBeenCalledWith(true, { profile });
+    expect(respond).toHaveBeenCalledWith(true, { profile, assignedAgentId: null });
   });
 
   it("keeps unresolved users.self unavailable and retryable when GitHub lookup fails", async () => {
@@ -273,6 +372,7 @@ describe("users gateway methods", () => {
     );
     expect(await runUsersHandler("users.self", {}, providerClient)).toHaveBeenCalledWith(true, {
       profile,
+      assignedAgentId: null,
     });
     expect(authenticatedGitHubIdentitySync).toHaveBeenCalledTimes(2);
   });
@@ -287,7 +387,7 @@ describe("users gateway methods", () => {
 
     const respond = await runUsersHandler("users.self", {}, proxyClient);
 
-    expect(respond).toHaveBeenCalledWith(true, { profile });
+    expect(respond).toHaveBeenCalledWith(true, { profile, assignedAgentId: null });
     expect(ensureProfileForEmail).toHaveBeenCalledWith("ada@github");
   });
 

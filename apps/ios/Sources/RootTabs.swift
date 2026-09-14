@@ -138,11 +138,23 @@ struct RootTabs: View {
         self.rootPresentation(
             self.rootLifecycle(
                 self.rootOverlays(
-                    self.sidebarSplitContent
+                    self.rootContent
                         .tint(OpenClawBrand.accent))))
             .overlay(alignment: .topLeading) {
                 self.uiTestReadinessMarker
             }
+    }
+
+    @ViewBuilder
+    private var rootContent: some View {
+        switch self.appModel.connectedFamilyAgentState {
+        case .locked:
+            ConnectedFamilyAgentShell()
+        case .verifying, .blocked:
+            ConnectedFamilyAgentAccessGate(state: self.appModel.connectedFamilyAgentState)
+        case .disconnected, .unrestricted:
+            self.sidebarSplitContent
+        }
     }
 
     @ViewBuilder

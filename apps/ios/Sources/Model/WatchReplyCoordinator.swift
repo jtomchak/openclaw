@@ -95,6 +95,7 @@ final class WatchReplyCoordinator {
     private let journal: OpenClawWatchMessageJournal
     private let gateway: GatewayNodeSession
     private let messaging: any WatchMessagingServicing
+    private let familyAgentState: @MainActor () -> NodeAppModel.ConnectedFamilyAgentState
     private let reportStorageWarning: @MainActor (String?) -> Void
     private var tasks: [CommandKey: Task<Void, Never>] = [:]
     private var pendingResumes: Set<CommandKey> = []
@@ -107,11 +108,13 @@ final class WatchReplyCoordinator {
         journal: OpenClawWatchMessageJournal,
         gateway: GatewayNodeSession,
         messaging: any WatchMessagingServicing,
+        familyAgentState: @escaping @MainActor () -> NodeAppModel.ConnectedFamilyAgentState = { .unrestricted },
         reportStorageWarning: @escaping @MainActor (String?) -> Void)
     {
         self.journal = journal
         self.gateway = gateway
         self.messaging = messaging
+        self.familyAgentState = familyAgentState
         self.reportStorageWarning = reportStorageWarning
     }
 
@@ -232,9 +235,13 @@ final class WatchReplyCoordinator {
 
     private func process(_ entry: OpenClawWatchMessageEntry) async -> Bool {
         guard let command = entry.command, let owner = entry.owner, !Task.isCancelled else { return false }
+        let familyAgentState = self.familyAgentState()
+        guard familyAgentState == .unrestricted || familyAgentState.lockedAgentID != nil else { return false }
+        let lockedAgentID = familyAgentState.lockedAgentID
         let transport = IOSGatewayChatTransport(
             gateway: self.gateway,
-            globalAgentId: command.context.agentId,
+            globalAgentId: lockedAgentID ?? command.context.agentId,
+            lockedAgentId: lockedAgentID,
             outboxGatewayID: command.context.gatewayStableID)
         if entry.phase == .accepted {
             await self.observe(entry, transport: transport)
@@ -248,6 +255,17 @@ final class WatchReplyCoordinator {
                 try await self.sendPendingReceipts()
                 return false
             }
+            guard self.familyAgentState() == familyAgentState else {
+                return try await self.journal.releaseNotDispatched(claim) == .applied
+            }
+            if let lockedAgentID,
+               lockedAgentID.caseInsensitiveCompare(command.context.agentId) != .orderedSame
+            {
+                await self.finish(claim, outcome: .failed(
+                    code: "routing_changed",
+                    message: String(localized: "The assigned agent changed. Review this message on iPhone.")))
+                return false
+            }
             guard lease.sessionRoutingContract == command.context.sessionRoutingContract else {
                 await self.finish(claim, outcome: .failed(
                     code: "routing_changed",
@@ -258,7 +276,7 @@ final class WatchReplyCoordinator {
             do {
                 response = try await lease.sendMessage(
                     sessionKey: command.context.deliverySessionKey,
-                    agentID: command.context.agentId,
+                    agentID: lockedAgentID ?? command.context.agentId,
                     message: command.text,
                     // The canonical request encoder omits an empty override for free-form chat.
                     thinking: NodeAppModel.watchThinkingOverride(for: command.kind) ?? "",
