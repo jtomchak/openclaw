@@ -241,7 +241,7 @@ struct ConnectedFamilyAgentShell: View {
 
                     Text(
                         """
-                        These are chat starters. OpenClaw does not save a separate feed, ideas list, goals list, or \
+                        These are chat starters. Family does not save a separate feed, ideas list, goals list, or \
                         artifact library here yet.
                         """)
                         .font(OpenClawType.caption)
@@ -354,15 +354,56 @@ struct ConnectedFamilyAgentAccessGate: View {
     }
 
     private var title: LocalizedStringKey {
-        self.state == .verifying ? "Checking agent access" : "Agent access unavailable"
+        self.state == .verifying ? "Checking your agent" : "Your agent is unavailable"
     }
 
     private var detail: LocalizedStringKey {
         self.state == .verifying
-            ? "OpenClaw is verifying the agent assigned to this profile."
+            ? "Family is securely verifying the agent assigned to this profile."
             : """
-            OpenClaw could not verify that the assigned agent is in the selectable agent roster. Reconnect or ask \
-            the Gateway owner for help.
+            Family could not verify your assigned agent. Reopen your invitation or ask the person who invited you \
+            for help.
             """
+    }
+}
+
+struct FamilyProductWelcomeView: View {
+    let connectionError: String?
+
+    var body: some View {
+        ZStack {
+            OpenClawProBackground()
+            VStack(spacing: 22) {
+                Image(systemName: "person.2.badge.key.fill")
+                    .font(.system(size: 54, weight: .semibold))
+                    .foregroundStyle(OpenClawBrand.accent.gradient)
+                    .accessibilityHidden(true)
+                VStack(spacing: 8) {
+                    Text("Welcome to Family")
+                        .font(OpenClawType.title1)
+                        .multilineTextAlignment(.center)
+                    Text("Open the invitation from your family organizer to securely connect your personal agent.")
+                        .font(OpenClawType.body)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                Label(
+                    "Your conversations and connected services stay assigned to your agent.",
+                    systemImage: "lock.shield.fill")
+                    .font(OpenClawType.subhead)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                if let connectionError {
+                    Text(connectionError)
+                        .font(OpenClawType.subhead)
+                        .foregroundStyle(OpenClawBrand.warn)
+                        .multilineTextAlignment(.center)
+                        .accessibilityIdentifier("FamilyProduct.ConnectionError")
+                }
+            }
+            .padding(32)
+            .frame(maxWidth: 520)
+        }
+        .accessibilityIdentifier("FamilyProduct.Welcome")
     }
 }

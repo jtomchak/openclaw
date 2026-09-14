@@ -348,7 +348,7 @@ describe("iOS Fastlane release upload gates", () => {
     expect(uploadCalls).toHaveLength(1);
     expect(fastfile).toContain("def perform_testflight_upload!");
     expect(laneBody(fastfile, "release_upload")).toContain("perform_testflight_upload!");
-    expect(laneBody(fastfile, "family_trial_upload")).toContain("perform_testflight_upload!");
+    expect(laneBody(fastfile, "family_upload")).toContain("perform_testflight_upload!");
     expect(fastfile).not.toMatch(/\n\s+lane :app_store do\b/);
     expect(fastfile).not.toContain("Deprecated. Use `pnpm ios:release:upload`.");
   });

@@ -57,6 +57,7 @@ struct RootTabs: View {
     @State private var didAutoOpenSettings: Bool = false
     @State private var didApplyInitialChatSession: Bool = false
     @State private var gatewaySetupRequest: GatewaySetupRequest?
+    @State private var familyProductConnectionError: String?
     @State private var suppressedExecApprovalForNotificationSettings: NodeAppModel.ExecApprovalInboxKey?
 
     init(initialSidebarVisibility: Bool? = nil) {
@@ -154,6 +155,27 @@ struct RootTabs: View {
 
     @ViewBuilder
     private var rootContent: some View {
+        if FamilyProductBuildConfig.isEnabled {
+            self.familyProductContent
+        } else {
+            self.openClawProductContent
+        }
+    }
+
+    @ViewBuilder
+    private var familyProductContent: some View {
+        switch self.appModel.connectedFamilyAgentState {
+        case .locked:
+            ConnectedFamilyAgentShell()
+        case .disconnected:
+            FamilyProductWelcomeView(connectionError: self.familyProductConnectionError)
+        case .verifying, .blocked, .unrestricted:
+            ConnectedFamilyAgentAccessGate(state: self.appModel.connectedFamilyAgentState)
+        }
+    }
+
+    @ViewBuilder
+    private var openClawProductContent: some View {
         switch self.appModel.connectedFamilyAgentState {
         case .locked:
             ConnectedFamilyAgentShell()
@@ -714,11 +736,13 @@ struct RootTabs: View {
 
     private func handleDashboardNavigationRequest(_ requestID: Int) {
         guard self.appModel.consumeDashboardNavigationRequest(requestID) else { return }
+        guard !FamilyProductBuildConfig.isEnabled else { return }
         self.selectSidebarDestination(.overview)
     }
 
+    @ViewBuilder
     private func rootPresentation(_ content: some View) -> some View {
-        content
+        let base = content
             .sheet(isPresented: self.$showGatewayProblemDetails) {
                 if let gatewayProblem = self.appModel.lastGatewayProblem {
                     GatewayProblemDetailsSheet(
@@ -769,9 +793,15 @@ struct RootTabs: View {
             }
             .gatewayTrustPromptAlert(isEnabled: !self.showOnboarding)
             .deepLinkAgentPromptAlert()
-            .execApprovalPromptDialog(
-                suppressedApproval: self.activeExecApprovalPromptSuppression)
-            .notificationPermissionGuidanceDialog(openNotifications: self.openNotificationSettings)
+
+        if FamilyProductBuildConfig.isEnabled {
+            base
+        } else {
+            base
+                .execApprovalPromptDialog(
+                    suppressedApproval: self.activeExecApprovalPromptSuppression)
+                .notificationPermissionGuidanceDialog(openNotifications: self.openNotificationSettings)
+        }
     }
 
     private func updateIdleTimer() {
@@ -844,6 +874,7 @@ extension RootTabs {
     }
 
     private func openNotificationSettings(_ approvalID: String?) {
+        guard !FamilyProductBuildConfig.isEnabled else { return }
         if let approvalID {
             self.suppressExecApprovalPromptForNotificationSettings(approvalID)
         }
@@ -920,7 +951,10 @@ extension RootTabs {
     }
 
     private func gatewayProblemPrimaryActionTitle(_ problem: GatewayConnectionProblem) -> String? {
-        GatewayProblemPrimaryAction.title(
+        if FamilyProductBuildConfig.isEnabled {
+            return problem.retryable ? String(localized: "Retry") : nil
+        }
+        return GatewayProblemPrimaryAction.title(
             for: problem,
             retryTitle: "Retry",
             resetTitle: "Reset onboarding",
@@ -928,6 +962,16 @@ extension RootTabs {
     }
 
     private func handleGatewayProblemPrimaryAction(_ problem: GatewayConnectionProblem) {
+        if FamilyProductBuildConfig.isEnabled {
+            guard problem.retryable else { return }
+            self.gatewayRetryFailure = nil
+            Task {
+                if case let .failed(message) = await self.gatewayController.retryGatewayConnection() {
+                    self.gatewayRetryFailure = message
+                }
+            }
+            return
+        }
         if problem.suggestsOnboardingReset {
             // Reset bumps onboarding.requestID, which re-presents the wizard.
             let instanceId = UserDefaults.standard.string(forKey: "node.instanceId") ?? ""
@@ -951,6 +995,11 @@ extension RootTabs {
     }
 
     private func evaluateOnboardingPresentation(force: Bool) {
+        guard !FamilyProductBuildConfig.isEnabled else {
+            self.didEvaluateOnboarding = true
+            self.showOnboarding = false
+            return
+        }
         if force {
             self.onboardingAllowSkip = true
             self.showOnboarding = true
@@ -990,6 +1039,7 @@ extension RootTabs {
     }
 
     private func maybeAutoOpenSettings() {
+        guard !FamilyProductBuildConfig.isEnabled else { return }
         guard !self.didAutoOpenSettings else { return }
         guard !self.showOnboarding else { return }
         let route = Self.startupPresentationRoute(
@@ -1010,6 +1060,10 @@ extension RootTabs {
         // The presented onboarding flow owns setup-link staging until it dismisses.
         guard !self.showOnboarding else { return }
         guard let link = appModel.consumePendingGatewaySetupLink() else { return }
+        if FamilyProductBuildConfig.isEnabled {
+            Task { await self.connectFamilyProduct(using: link) }
+            return
+        }
         self.showOnboarding = false
         self.presentedSheet = nil
         self.didAutoOpenSettings = true
@@ -1022,6 +1076,48 @@ extension RootTabs {
     private func handleGatewaySetupRequest(_ requestID: Int) {
         guard self.gatewaySetupRequest?.id == requestID else { return }
         self.gatewaySetupRequest = nil
+    }
+
+    private func connectFamilyProduct(using requestedLink: GatewayConnectDeepLink) async {
+        self.familyProductConnectionError = nil
+        let link = await self.gatewayController.selectReachableSetupLink(requestedLink)
+        let instanceID = GatewaySettingsStore.currentInstanceID()
+        let setupAuth = GatewayConnectionController.ManualAuthOverride.setupAuth(from: link)
+        if setupAuth.hasBootstrapToken {
+            guard await GatewayOnboardingReset.prepareForBootstrapPairing(
+                appModel: self.appModel,
+                instanceId: instanceID,
+                gatewayStableID: setupAuth.targetStableID)
+            else {
+                self
+                    .familyProductConnectionError =
+                    String(localized: "Could not safely prepare this device. Ask for a new invitation.")
+                return
+            }
+        }
+        guard !instanceID.isEmpty else {
+            self
+                .familyProductConnectionError =
+                String(localized: "Could not prepare secure app storage. Reopen the invitation.")
+            return
+        }
+        GatewaySettingsStore.saveGatewayCredentials(
+            token: setupAuth.token,
+            bootstrapToken: setupAuth.bootstrapToken,
+            password: setupAuth.password,
+            gatewayStableID: setupAuth.targetStableID,
+            suppressStoredDeviceAuth: true,
+            instanceId: instanceID)
+        let result = await self.gatewayController.connectManual(
+            host: link.host,
+            port: link.port,
+            useTLS: link.tls,
+            contextPath: link.contextPath,
+            authOverride: setupAuth.manualAuthOverride,
+            forceReconnect: true)
+        if case let .failed(message) = result {
+            self.familyProductConnectionError = message
+        }
     }
 
     private func maybeRequestLocalNetworkAccess(reason: String) {
@@ -1043,6 +1139,7 @@ extension RootTabs {
     }
 
     private func maybeShowQuickSetup() {
+        guard !FamilyProductBuildConfig.isEnabled else { return }
         let shouldPresent = Self.shouldPresentQuickSetup(
             quickSetupDismissed: self.quickSetupDismissed,
             showOnboarding: self.showOnboarding,

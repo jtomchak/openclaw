@@ -21,8 +21,8 @@ source "${ROOT_DIR}/scripts/lib/ios-fastlane.sh"
 parse_ios_release_args upload "$@"
 
 RELEASE_LANE="release_upload"
-if [[ "${OPENCLAW_IOS_RELEASE_PRODUCT:-}" == "family-trial" ]]; then
-  RELEASE_LANE="family_trial_upload"
+if [[ "${OPENCLAW_IOS_RELEASE_PRODUCT:-}" == "family" ]]; then
+  RELEASE_LANE="family_upload"
 fi
 
 FASTLANE_ARGS=(ios "${RELEASE_LANE}")

@@ -9,7 +9,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>OpenClaw</string>
+	<string>$(OPENCLAW_APP_DISPLAY_NAME)</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIconName</key>
@@ -88,6 +88,8 @@
 	<string>$(OPENCLAW_BUILD_TIMESTAMP)</string>
 	<key>OpenClawCanonicalVersion</key>
 	<string>$(OPENCLAW_IOS_VERSION)</string>
+	<key>OpenClawFamilyProduct</key>
+	<string>$(OPENCLAW_FAMILY_PRODUCT)</string>
 	<key>OpenClawFamilyRelayHost</key>
 	<string>$(OPENCLAW_FAMILY_RELAY_HOST)</string>
 	<key>OpenClawGitCommit</key>

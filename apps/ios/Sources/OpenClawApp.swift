@@ -214,6 +214,7 @@ final class OpenClawAppDelegate: NSObject, UIApplicationDelegate, @preconcurrenc
             await model.handleFamilyInviteDeepLink(invite)
             return
         }
+        guard !FamilyProductBuildConfig.isEnabled else { return }
         guard let route = DeepLinkParser.parse(url) else { return }
 
         switch route {
@@ -225,7 +226,10 @@ final class OpenClawAppDelegate: NSObject, UIApplicationDelegate, @preconcurrenc
     }
 
     private static func isSupportedOpenURL(_ url: URL) -> Bool {
-        self.parseFamilyInvite(url) != nil || DeepLinkParser.parse(url) != nil
+        if self.parseFamilyInvite(url) != nil {
+            return true
+        }
+        return !FamilyProductBuildConfig.isEnabled && DeepLinkParser.parse(url) != nil
     }
 
     private static func parseFamilyInvite(_ url: URL) -> FamilyInviteDeepLink? {

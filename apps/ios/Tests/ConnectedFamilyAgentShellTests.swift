@@ -3,6 +3,13 @@ import Testing
 @testable import OpenClaw
 
 struct ConnectedFamilyAgentShellTests {
+    @Test func `family product build flag defaults closed`() {
+        #expect(!FamilyProductBuildConfig.isEnabled(value: nil))
+        #expect(!FamilyProductBuildConfig.isEnabled(value: "NO"))
+        #expect(FamilyProductBuildConfig.isEnabled(value: "YES"))
+        #expect(FamilyProductBuildConfig.isEnabled(value: true))
+    }
+
     @Test func `fixture selects a deterministic connected family tab`() {
         let arguments = [
             "OpenClaw",
@@ -22,10 +29,82 @@ struct ConnectedFamilyAgentShellTests {
         let source = try Self.source("Sources/ConnectedFamilyAgentShell.swift")
         #expect(source.contains("ChatProTab(openSettings: nil)"))
         #expect(source.contains("requestFamilyAgentChat(prompt: prompt)"))
-        #expect(source.contains("OpenClaw does not save a separate feed"))
+        #expect(source.contains("Family does not save a separate feed"))
         #expect(!source.contains("SettingsProTab("))
         #expect(!source.contains("RootSidebar("))
         #expect(!source.contains("AgentProTab("))
+    }
+
+    @Test func `family product never exposes the OpenClaw admin shell`() throws {
+        let source = try Self.source("Sources/RootTabs.swift")
+        let familyRoot = try Self.extract(
+            source,
+            from: "private var familyProductContent",
+            to: "private var openClawProductContent")
+
+        #expect(familyRoot.contains("ConnectedFamilyAgentShell()"))
+        #expect(familyRoot.contains("FamilyProductWelcomeView(connectionError:"))
+        #expect(familyRoot.contains("ConnectedFamilyAgentAccessGate"))
+        #expect(!familyRoot.contains("sidebarSplitContent"))
+        #expect(!familyRoot.contains("SettingsProTab"))
+        #expect(!familyRoot.contains("RootSidebar"))
+    }
+
+    @Test func `family invite handoff connects without routing through settings`() throws {
+        let source = try Self.source("Sources/RootTabs.swift")
+        let handoff = try Self.extract(
+            source,
+            from: "private func maybeOpenSettingsForGatewaySetup",
+            to: "private func handleGatewaySetupRequest")
+        let connection = try Self.extract(
+            source,
+            from: "private func connectFamilyProduct",
+            to: "private func maybeRequestLocalNetworkAccess")
+
+        #expect(handoff.contains("FamilyProductBuildConfig.isEnabled"))
+        #expect(handoff.contains("connectFamilyProduct(using: link)"))
+        #expect(connection.contains("GatewayOnboardingReset.prepareForBootstrapPairing"))
+        #expect(connection.contains("gatewayController.connectManual"))
+        #expect(connection.contains("GatewaySettingsStore.saveGatewayCredentials"))
+        #expect(!connection.contains("SettingsProTab"))
+        #expect(!connection.contains("selectSidebarDestination"))
+    }
+
+    @Test func `family product rejects ordinary OpenClaw deep links`() throws {
+        let source = try Self.source("Sources/OpenClawApp.swift")
+        let handler = try Self.extract(
+            source,
+            from: "func handleOpenURL",
+            to: "private static func isSupportedOpenURL")
+
+        #expect(handler.contains("handleFamilyInviteDeepLink"))
+        #expect(handler.contains("guard !FamilyProductBuildConfig.isEnabled else { return }"))
+        #expect(try #require(handler.range(of: "handleFamilyInviteDeepLink")?.lowerBound) <
+            handler.range(of: "guard !FamilyProductBuildConfig.isEnabled")!.lowerBound)
+    }
+
+    @Test func `family product suppresses OpenClaw approval and settings presentation`() throws {
+        let source = try Self.source("Sources/RootTabs.swift")
+        let presentation = try Self.extract(
+            source,
+            from: "private func rootPresentation",
+            to: "private func updateIdleTimer")
+        let notifications = try Self.extract(
+            source,
+            from: "private func openNotificationSettings",
+            to: "private func suppressExecApprovalPromptForNotificationSettings")
+        let gatewayProblem = try Self.extract(
+            source,
+            from: "private func gatewayProblemPrimaryActionTitle",
+            to: "private func evaluateOnboardingPresentation")
+
+        #expect(presentation.contains("if FamilyProductBuildConfig.isEnabled"))
+        #expect(presentation.contains("execApprovalPromptDialog"))
+        #expect(presentation.contains("notificationPermissionGuidanceDialog"))
+        #expect(notifications.contains("guard !FamilyProductBuildConfig.isEnabled else { return }"))
+        #expect(gatewayProblem.contains("if FamilyProductBuildConfig.isEnabled"))
+        #expect(gatewayProblem.contains("problem.retryable ? String(localized: \"Retry\") : nil"))
+        #expect(gatewayProblem.contains("guard problem.retryable else { return }"))
     }
 
     @Test func `family shell uses a floating liquid glass tab bar with a material fallback`() throws {
