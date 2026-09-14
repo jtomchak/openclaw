@@ -33,7 +33,10 @@ import {
 import { ADMIN_SCOPE, APPROVALS_SCOPE } from "../../method-scopes.js";
 import { serializeEventPayload } from "../../node-registry.js";
 import { isOperatorApprovalRuntimeToken } from "../../operator-approval-runtime-token.js";
-import { resolveOperatorRolePolicyForProfile } from "../../operator-role-policy.js";
+import {
+  resolveAssignedAgentId,
+  resolveOperatorRolePolicyForProfile,
+} from "../../operator-role-policy.js";
 import {
   buildPluginNodeCapabilityScopedHostUrl,
   indexPluginNodeCapabilitySurfaces,
@@ -243,6 +246,7 @@ export async function attachAuthenticatedGatewayConnect(
           context.configSnapshot,
         )
       : undefined;
+  const assignedAgentId = resolveAssignedAgentId(rolePolicy);
   const scopes = rolePolicy
     ? effectiveScopes.scopes.filter((scope) =>
         roleScopesAllow({
@@ -382,6 +386,7 @@ export async function attachAuthenticatedGatewayConnect(
     connectParams.client.id === GATEWAY_CLIENT_IDS.CONTROL_UI &&
     scopes.includes(ADMIN_SCOPE);
   const internal = {
+    ...(assignedAgentId ? { assignedAgentId } : {}),
     ...(isLocalClient ? { isLocalClient: true as const } : {}),
     ...(controlUiAdmin ? { controlUiAdmin: true as const } : {}),
     ...(isTrustedApprovalRuntime ? { approvalRuntime: true } : {}),

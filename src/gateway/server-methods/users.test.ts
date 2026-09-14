@@ -167,13 +167,23 @@ describe("users gateway methods", () => {
     const first = await runUsersHandler("users.self", {}, selfClient);
     const second = await runUsersHandler("users.self", {}, selfClient);
 
-    expect(first).toHaveBeenCalledWith(true, { profile });
-    expect(second).toHaveBeenCalledWith(true, { profile });
+    expect(first).toHaveBeenCalledWith(true, { profile, assignedAgentId: null });
+    expect(second).toHaveBeenCalledWith(true, { profile, assignedAgentId: null });
     expect(validateUsersSelfResult(first.mock.calls[0]?.[1])).toBe(true);
     expect(ensureProfileForEmail).toHaveBeenNthCalledWith(1, "ada@example.com");
     expect(ensureProfileForEmail).toHaveBeenNthCalledWith(2, "ada@example.com");
     expect(getUserProfileListItem).toHaveBeenNthCalledWith(1, profile.id);
     expect(getUserProfileListItem).toHaveBeenNthCalledWith(2, profile.id);
+  });
+
+  it("returns the connection-bound assigned agent", async () => {
+    ensureProfileForEmail.mockReturnValue({ id: profile.id });
+    const client = { ...selfClient, internal: { assignedAgentId: "research" } };
+
+    const respond = await runUsersHandler("users.self", {}, client);
+
+    expect(respond).toHaveBeenCalledWith(true, { profile, assignedAgentId: "research" });
+    expect(validateUsersSelfResult(respond.mock.calls[0]?.[1])).toBe(true);
   });
 
   function connectedProfileClient(kind: string) {
@@ -200,7 +210,10 @@ describe("users gateway methods", () => {
 
       const respond = await runUsersHandler("users.self", {}, providerClient);
 
-      expect(respond).toHaveBeenCalledWith(true, { profile: { ...profile, emails: [] } });
+      expect(respond).toHaveBeenCalledWith(true, {
+        profile: { ...profile, emails: [] },
+        assignedAgentId: null,
+      });
       expect(ensureProfileForEmail).not.toHaveBeenCalled();
     },
   );
@@ -237,7 +250,7 @@ describe("users gateway methods", () => {
     expect(getUserProfileListItem).not.toHaveBeenCalled();
     finishSync?.();
     const respond = await pending;
-    expect(respond).toHaveBeenCalledWith(true, { profile });
+    expect(respond).toHaveBeenCalledWith(true, { profile, assignedAgentId: null });
   });
 
   it("keeps unresolved users.self unavailable and retryable when GitHub lookup fails", async () => {
@@ -273,6 +286,7 @@ describe("users gateway methods", () => {
     );
     expect(await runUsersHandler("users.self", {}, providerClient)).toHaveBeenCalledWith(true, {
       profile,
+      assignedAgentId: null,
     });
     expect(authenticatedGitHubIdentitySync).toHaveBeenCalledTimes(2);
   });
@@ -287,7 +301,7 @@ describe("users gateway methods", () => {
 
     const respond = await runUsersHandler("users.self", {}, proxyClient);
 
-    expect(respond).toHaveBeenCalledWith(true, { profile });
+    expect(respond).toHaveBeenCalledWith(true, { profile, assignedAgentId: null });
     expect(ensureProfileForEmail).toHaveBeenCalledWith("ada@github");
   });
 

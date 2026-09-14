@@ -7,6 +7,7 @@ import { withOpenClawTestState } from "../test-utils/openclaw-test-state.js";
 import {
   authorizeGatewaySessionCreation,
   invalidateOperatorRolePolicy,
+  resolveAssignedAgentId,
   resolveCreatorSandbox,
   resolveGatewayOperatorRoleActor,
   resolveOperatorRolePolicy,
@@ -69,6 +70,17 @@ function identifiedClient(profileId: string): GatewayClient {
 afterEach(() => closeOpenClawStateDatabaseForTest());
 
 describe("operator role policy", () => {
+  it.each([
+    ["one agent", guestRole, "guest-agent"],
+    ["no agents", { ...guestRole, agents: [] }, null],
+    ["multiple agents", { ...guestRole, agents: ["guest-agent", "other"] }, null],
+    ["wildcard access", { ...guestRole, agents: "*" }, null],
+    ["administrator", { ...guestRole, scopes: ["operator.admin"] }, null],
+    ["no role", undefined, null],
+  ] as const)("resolves %s as an assigned-agent identity", (_name, role, expected) => {
+    expect(resolveAssignedAgentId(role)).toBe(expected);
+  });
+
   it("preserves legacy access only when operator roles are not configured", () => {
     expect(resolveOperatorRolePolicyForProfile("unread-profile", {})).toBeUndefined();
     expect(resolveOperatorRolePolicyForProfile(undefined, roleConfig())).toMatchObject({
@@ -228,6 +240,26 @@ describe("operator role policy", () => {
         authorizeGatewaySessionCreation({ cfg, client: trackedOperator, agentId: "private-agent" }),
       ).toBeUndefined();
       expect(resolveOperatorRolePolicy(trackedOperator, cfg)).toBeUndefined();
+    });
+  });
+
+  it("fails closed when a connection's assigned agent mismatches or is revoked", async () => {
+    await withOpenClawTestState({ scenario: "minimal" }, async () => {
+      const profile = ensureProfileForEmail("role-bound-agent@example.com");
+      const cfg = roleConfig();
+      const client = identifiedClient(profile.id);
+      client.internal = { assignedAgentId: "guest-agent" };
+
+      expect(
+        authorizeGatewaySessionCreation({ cfg, client, agentId: "other-agent" }),
+      ).toMatchObject({ code: "FORBIDDEN", message: expect.stringContaining("guest-agent") });
+
+      setUserProfileRole(profile.id, "maintainer");
+      invalidateOperatorRolePolicy(profile.id);
+
+      expect(
+        authorizeGatewaySessionCreation({ cfg, client, agentId: "guest-agent" }),
+      ).toMatchObject({ code: "FORBIDDEN", message: expect.stringContaining("reconnect") });
     });
   });
 });

@@ -61,6 +61,8 @@ export type GatewayClient = {
   pluginNodeCapabilities?: Record<string, { capability: string; expiresAtMs: number }>;
   isDeviceTokenAuth?: boolean;
   internal?: {
+    /** Agent identity fixed at authenticated connection admission; never accepted from wire params. */
+    readonly assignedAgentId?: string;
     /** Handshake-attested direct-local transport; never accepted from wire params. */
     isLocalClient?: true;
     /** Authenticated Control UI admin admission; never accepted from wire params. */

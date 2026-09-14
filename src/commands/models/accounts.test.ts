@@ -64,6 +64,7 @@ const inputStep = {
   externalUrl: "https://auth.example/authorize?state=synthetic-state",
 } as const;
 const self = {
+  assignedAgentId: null,
   profile: {
     id: PROFILE_ID,
     displayName: "Test Person",
