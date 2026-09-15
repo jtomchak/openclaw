@@ -610,6 +610,31 @@ export interface ExecutionOwnerLifecycleBindings {
   owner_kind: string;
 }
 
+export interface FamilyMutations {
+  agent_id: string;
+  created_at_ms: number;
+  idempotency_key: string;
+  profile_id: string;
+  request_hash: string;
+  result_json: string;
+}
+
+export interface FamilyRecords {
+  agent_id: string;
+  change_sequence: number;
+  created_at_ms: number;
+  deleted_at_ms: number | null;
+  kind: string;
+  lifecycle_state: string;
+  payload_json: string;
+  profile_id: string;
+  provenance_json: string;
+  record_id: string;
+  revision: number;
+  updated_at_ms: number;
+  visibility: string;
+}
+
 export interface FleetCells {
   container_name: string;
   created_at_ms: number;
@@ -1797,6 +1822,8 @@ export interface DB {
   execution_decision_facts: ExecutionDecisionFacts;
   execution_identity_contexts: ExecutionIdentityContexts;
   execution_owner_lifecycle_bindings: ExecutionOwnerLifecycleBindings;
+  family_mutations: FamilyMutations;
+  family_records: FamilyRecords;
   fleet_cells: FleetCells;
   flow_runs: FlowRuns;
   gateway_boot_lifecycle: GatewayBootLifecycle;

@@ -122,6 +122,33 @@ public enum EnvironmentStatus: String, Codable, Sendable {
     case error = "error"
 }
 
+public enum FamilyMutationOperation: String, Codable, Sendable {
+    case create = "create"
+    case update = "update"
+    case delete = "delete"
+}
+
+public enum FamilyRecordKind: String, Codable, Sendable {
+    case feedItem = "feed_item"
+    case idea = "idea"
+    case goal = "goal"
+    case libraryItem = "library_item"
+    case actionRequest = "action_request"
+}
+
+public enum FamilyRecordLifecycleState: String, Codable, Sendable {
+    case proposed = "proposed"
+    case active = "active"
+    case completed = "completed"
+    case dismissed = "dismissed"
+    case archived = "archived"
+}
+
+public enum FamilyRecordVisibility: String, Codable, Sendable {
+    case _private = "private"
+    case sharedWithOrganizers = "shared_with_organizers"
+}
+
 public enum GitHubIdentityScope: String, Codable, Sendable {
     case system = "system"
     case agent = "agent"
@@ -7720,6 +7747,196 @@ public struct ExternalPostApprovalScope: Codable, Sendable {
         self.kind = kind
         self.target = target
         self.visibility = visibility
+    }
+}
+
+public struct FamilyBootstrapParams: Codable, Sendable {}
+
+public struct FamilyBootstrapResult: Codable, Sendable {
+    public let records: [FamilyRecord]
+    public let cursor: String
+    public let hasmore: Bool
+    public let capabilities: [String]
+
+    public init(
+        records: [FamilyRecord],
+        cursor: String,
+        hasmore: Bool,
+        capabilities: [String])
+    {
+        self.records = records
+        self.cursor = cursor
+        self.hasmore = hasmore
+        self.capabilities = capabilities
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case records
+        case cursor
+        case hasmore = "hasMore"
+        case capabilities
+    }
+}
+
+public struct FamilyListParams: Codable, Sendable {
+    public let cursor: String?
+    public let limit: Int?
+
+    public init(
+        cursor: String? = nil,
+        limit: Int? = nil)
+    {
+        self.cursor = cursor
+        self.limit = limit
+    }
+}
+
+public struct FamilyListResult: Codable, Sendable {
+    public let records: [FamilyRecord]
+    public let cursor: String
+    public let hasmore: Bool
+
+    public init(
+        records: [FamilyRecord],
+        cursor: String,
+        hasmore: Bool)
+    {
+        self.records = records
+        self.cursor = cursor
+        self.hasmore = hasmore
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case records
+        case cursor
+        case hasmore = "hasMore"
+    }
+}
+
+public struct FamilyMutateParams: Codable, Sendable {
+    public let operation: FamilyMutationOperation
+    public let id: String?
+    public let expectedrevision: Int?
+    public let idempotencykey: String
+    public let visibility: FamilyRecordVisibility?
+    public let lifecyclestate: FamilyRecordLifecycleState?
+    public let payload: AnyCodable?
+
+    public init(
+        operation: FamilyMutationOperation,
+        id: String? = nil,
+        expectedrevision: Int? = nil,
+        idempotencykey: String,
+        visibility: FamilyRecordVisibility? = nil,
+        lifecyclestate: FamilyRecordLifecycleState? = nil,
+        payload: AnyCodable? = nil)
+    {
+        self.operation = operation
+        self.id = id
+        self.expectedrevision = expectedrevision
+        self.idempotencykey = idempotencykey
+        self.visibility = visibility
+        self.lifecyclestate = lifecyclestate
+        self.payload = payload
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case operation
+        case id
+        case expectedrevision = "expectedRevision"
+        case idempotencykey = "idempotencyKey"
+        case visibility
+        case lifecyclestate = "lifecycleState"
+        case payload
+    }
+}
+
+public struct FamilyMutateResult: Codable, Sendable {
+    public let record: FamilyRecord
+    public let replayed: Bool
+
+    public init(
+        record: FamilyRecord,
+        replayed: Bool)
+    {
+        self.record = record
+        self.replayed = replayed
+    }
+}
+
+public struct FamilyRecordProvenance: Codable, Sendable {
+    public let actortype: AnyCodable
+    public let actorid: String?
+    public let source: String?
+
+    public init(
+        actortype: AnyCodable,
+        actorid: String? = nil,
+        source: String? = nil)
+    {
+        self.actortype = actortype
+        self.actorid = actorid
+        self.source = source
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case actortype = "actorType"
+        case actorid = "actorId"
+        case source
+    }
+}
+
+public struct FamilyRecord: Codable, Sendable {
+    public let id: String
+    public let kind: FamilyRecordKind
+    public let revision: Int
+    public let sequence: Int
+    public let visibility: FamilyRecordVisibility
+    public let lifecyclestate: FamilyRecordLifecycleState
+    public let provenance: FamilyRecordProvenance
+    public let payload: AnyCodable
+    public let createdatms: Int
+    public let updatedatms: Int
+    public let deletedatms: Int?
+
+    public init(
+        id: String,
+        kind: FamilyRecordKind,
+        revision: Int,
+        sequence: Int,
+        visibility: FamilyRecordVisibility,
+        lifecyclestate: FamilyRecordLifecycleState,
+        provenance: FamilyRecordProvenance,
+        payload: AnyCodable,
+        createdatms: Int,
+        updatedatms: Int,
+        deletedatms: Int? = nil)
+    {
+        self.id = id
+        self.kind = kind
+        self.revision = revision
+        self.sequence = sequence
+        self.visibility = visibility
+        self.lifecyclestate = lifecyclestate
+        self.provenance = provenance
+        self.payload = payload
+        self.createdatms = createdatms
+        self.updatedatms = updatedatms
+        self.deletedatms = deletedatms
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case kind
+        case revision
+        case sequence
+        case visibility
+        case lifecyclestate = "lifecycleState"
+        case provenance
+        case payload
+        case createdatms = "createdAtMs"
+        case updatedatms = "updatedAtMs"
+        case deletedatms = "deletedAtMs"
     }
 }
 

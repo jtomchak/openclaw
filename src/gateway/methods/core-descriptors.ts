@@ -680,6 +680,19 @@ const CORE_GATEWAY_METHOD_SPECS = [
   ["canvas.document.preview", "canvas", "operator.read", "2026.9"],
   ["computer.status", "computer", "operator.read", "2026.9"],
   ["computer.invoke", "computer", "operator.write", "2026.9"],
+  // Family domain methods append so every previously advertised method index remains stable.
+  ["family.bootstrap", "family-domain", "operator.read", "2026.9"],
+  ["family.sync", "family-domain", "operator.read", "2026.9"],
+  ["family.feed.list", "family-domain", "operator.read", "2026.9"],
+  ["family.feed.mutate", "family-domain", "operator.write", "2026.9"],
+  ["family.ideas.list", "family-domain", "operator.read", "2026.9"],
+  ["family.ideas.mutate", "family-domain", "operator.write", "2026.9"],
+  ["family.goals.list", "family-domain", "operator.read", "2026.9"],
+  ["family.goals.mutate", "family-domain", "operator.write", "2026.9"],
+  ["family.library.list", "family-domain", "operator.read", "2026.9"],
+  ["family.library.mutate", "family-domain", "operator.write", "2026.9"],
+  ["family.actions.list", "family-domain", "operator.read", "2026.9"],
+  ["family.actions.mutate", "family-domain", "operator.write", "2026.9"],
 ] as const satisfies readonly CoreGatewayMethodSpecRow[];
 
 export type CoreGatewayHandlerFamily = Exclude<(typeof CORE_GATEWAY_METHOD_SPECS)[number][1], null>;

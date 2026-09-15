@@ -4,6 +4,7 @@ import type * as AgentSchema from "./schema/agent.js";
 import type * as BoardSchema from "./schema/board.js";
 import type { CanvasDocumentPreviewParams, CanvasDocumentViewParams } from "./schema/canvas.js";
 import type { CommandsListParams } from "./schema/commands.js";
+import type * as FamilySchema from "./schema/family-domain.js";
 import type * as HumanMentionsSchema from "./schema/human-mentions.js";
 import type { LogsTailParams } from "./schema/logs-chat.js";
 import type { PortalCloseParams, PortalListParams, PortalOpenParams } from "./schema/portals.js";
@@ -14,6 +15,18 @@ import type * as UsersSchema from "./schema/users.js";
 
 /** Schema-derived payload ownership for statically validated core Gateway methods. */
 export type GatewayCoreRequestParams = {
+  "family.bootstrap": FamilySchema.FamilyBootstrapParams;
+  "family.sync": FamilySchema.FamilySyncParams;
+  "family.feed.list": FamilySchema.FamilyListParams;
+  "family.feed.mutate": FamilySchema.FamilyMutateParams;
+  "family.ideas.list": FamilySchema.FamilyListParams;
+  "family.ideas.mutate": FamilySchema.FamilyMutateParams;
+  "family.goals.list": FamilySchema.FamilyListParams;
+  "family.goals.mutate": FamilySchema.FamilyMutateParams;
+  "family.library.list": FamilySchema.FamilyListParams;
+  "family.library.mutate": FamilySchema.FamilyMutateParams;
+  "family.actions.list": FamilySchema.FamilyListParams;
+  "family.actions.mutate": FamilySchema.FamilyMutateParams;
   "agent.invitations.create": AgentInvitationSchema.AgentInvitationsCreateParams;
   "agent.invitations.redeem": AgentInvitationSchema.AgentInvitationsRedeemParams;
   "agent.invitations.revoke": AgentInvitationSchema.AgentInvitationsRevokeParams;

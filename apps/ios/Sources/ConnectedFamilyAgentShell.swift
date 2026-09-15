@@ -1,4 +1,5 @@
 import Foundation
+import OpenClawProtocol
 import SwiftUI
 
 enum ConnectedFamilyAgentTab: String, CaseIterable, Identifiable {
@@ -56,15 +57,73 @@ enum ConnectedFamilyAgentShellFixture {
         return ConnectedFamilyAgentTab(
             rawValue: arguments[valueIndex].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()) ?? .chat
     }
+
+    static var records: [FamilyRecord] {
+        #if DEBUG
+        [
+            self.record(
+                id: "feed-soccer",
+                kind: .feedItem,
+                title: "Soccer registration closes Friday",
+                summary: "Your school email says the registration form and fee are due before the weekend."),
+            self.record(
+                id: "feed-week",
+                kind: .feedItem,
+                title: "A calmer plan for this week",
+                summary: "Three open tasks are worth handling before Thursday."),
+            self.record(
+                id: "idea-day-plan",
+                kind: .idea,
+                title: "Turn your inbox into a plan for the day",
+                summary: "Your agent can organize messages, calendar events, and open tasks into one short plan."),
+            self.record(
+                id: "goal-guitar",
+                kind: .goal,
+                title: "Learn one complete song",
+                summary: "Two practice sessions completed this week."),
+            self.record(
+                id: "library-plan",
+                kind: .libraryItem,
+                title: "Salt Lake City trip plan",
+                summary: "Ready · Updated today"),
+        ]
+        #else
+        []
+        #endif
+    }
+
+    private static func record(
+        id: String,
+        kind: FamilyRecordKind,
+        title: String,
+        summary: String) -> FamilyRecord
+    {
+        FamilyRecord(
+            id: id,
+            kind: kind,
+            revision: 1,
+            sequence: 1,
+            visibility: ._private,
+            lifecyclestate: kind == .idea ? .proposed : .active,
+            provenance: FamilyRecordProvenance(actortype: AnyCodable("agent"), source: "fixture"),
+            payload: AnyCodable([
+                "title": AnyCodable(title),
+                "summary": AnyCodable(summary),
+            ]),
+            createdatms: 1,
+            updatedatms: 1)
+    }
 }
 
 struct ConnectedFamilyAgentShell: View {
     @Environment(NodeAppModel.self) private var appModel
     @State private var selectedTab: ConnectedFamilyAgentTab
     @Namespace private var tabSelectionNamespace
+    private let fixtureEnabled: Bool
 
     init(arguments: [String] = ProcessInfo.processInfo.arguments) {
         _selectedTab = State(initialValue: ConnectedFamilyAgentShellFixture.initialTab(arguments: arguments))
+        self.fixtureEnabled = ConnectedFamilyAgentShellFixture.isEnabled(arguments: arguments)
     }
 
     var body: some View {
@@ -75,6 +134,11 @@ struct ConnectedFamilyAgentShell: View {
             }
             .background(OpenClawProBackground())
             .accessibilityIdentifier("FamilyAgent.Shell")
+            .task {
+                if !self.fixtureEnabled, self.appModel.familyDomainLoadState == .idle {
+                    await self.appModel.refreshFamilyDomain()
+                }
+            }
     }
 
     @ViewBuilder
@@ -85,65 +149,13 @@ struct ConnectedFamilyAgentShell: View {
                 ChatProTab(openSettings: nil)
             }
         case .feed:
-            self.starterSurface(
-                title: "Feed",
-                subtitle: "Catch up with what matters through a conversation with your agent.",
-                symbol: "rectangle.stack.fill",
-                cards: [
-                    .init(
-                        title: "Today’s update",
-                        detail: "Ask for a concise summary of recent work and anything that needs your attention.",
-                        prompt: "Give me a concise update on our recent work and anything that needs my attention."),
-                    .init(
-                        title: "Pick up where we left off",
-                        detail: "Open a chat about the most useful next step.",
-                        prompt: "Help me pick up where we left off and choose the most useful next step."),
-                ])
+            self.domainSurface(tab: .feed, kind: .feedItem)
         case .ideas:
-            self.starterSurface(
-                title: "Ideas",
-                subtitle: "Turn a thought into a conversation, outline, or next experiment.",
-                symbol: "lightbulb.fill",
-                cards: [
-                    .init(
-                        title: "Explore an idea",
-                        detail: "Develop a rough thought without pretending it has been saved elsewhere.",
-                        prompt: "Help me explore a new idea. Start by asking what I have in mind."),
-                    .init(
-                        title: "Make it actionable",
-                        detail: "Turn an idea into a small, realistic first step.",
-                        prompt: "Help me turn one of my ideas into a small, realistic first step."),
-                ])
+            self.domainSurface(tab: .ideas, kind: .idea)
         case .goals:
-            self.starterSurface(
-                title: "Goals",
-                subtitle: "Use chat to clarify a goal and decide what to do next.",
-                symbol: "scope",
-                cards: [
-                    .init(
-                        title: "Shape a goal",
-                        detail: "Describe the outcome, constraints, and a practical milestone.",
-                        prompt: "Help me shape a goal by clarifying the outcome, constraints, and first milestone."),
-                    .init(
-                        title: "Plan this week",
-                        detail: "Choose a manageable step for the next seven days.",
-                        prompt: "Help me choose a manageable step toward my goal for the next seven days."),
-                ])
+            self.domainSurface(tab: .goals, kind: .goal)
         case .library:
-            self.starterSurface(
-                title: "Library & Artifacts",
-                subtitle: "Ask your agent to find or create something in chat.",
-                symbol: "books.vertical.fill",
-                cards: [
-                    .init(
-                        title: "Find something",
-                        detail: "Ask what is available in this agent’s workspace and connected tools.",
-                        prompt: "Help me find a useful document or artifact related to what we have been working on."),
-                    .init(
-                        title: "Create an artifact",
-                        detail: "Start a chat to draft a useful document, list, or plan.",
-                        prompt: "Help me create a useful artifact. Ask what format and outcome I need."),
-                ])
+            self.domainSurface(tab: .library, kind: .libraryItem)
         }
     }
 
@@ -168,27 +180,21 @@ struct ConnectedFamilyAgentShell: View {
                 self.selectedTab = tab
             }
         } label: {
-            VStack(spacing: 3) {
-                Image(systemName: tab.symbol)
-                    .font(.system(size: 17, weight: .semibold))
-                    .symbolEffect(.bounce, value: self.selectedTab == tab)
-                    .accessibilityHidden(true)
-                Text(tab.title)
-                    .font(OpenClawType.caption2Medium)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-            }
-            .foregroundStyle(self.selectedTab == tab ? .white : .secondary)
-            .frame(maxWidth: .infinity, minHeight: 48)
-            .contentShape(Capsule())
-            .background {
-                if self.selectedTab == tab {
-                    Capsule()
-                        .fill(OpenClawBrand.accent.gradient)
-                        .matchedGeometryEffect(id: "FamilyAgent.Tab.Selection", in: self.tabSelectionNamespace)
-                        .shadow(color: OpenClawBrand.accent.opacity(0.24), radius: 8, y: 3)
+            Image(systemName: tab.symbol)
+                .font(.system(size: 19, weight: .semibold))
+                .symbolEffect(.bounce, value: self.selectedTab == tab)
+                .accessibilityHidden(true)
+                .foregroundStyle(self.selectedTab == tab ? .white : .secondary)
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .contentShape(Capsule())
+                .background {
+                    if self.selectedTab == tab {
+                        Capsule()
+                            .fill(OpenClawBrand.accent.gradient)
+                            .matchedGeometryEffect(id: "FamilyAgent.Tab.Selection", in: self.tabSelectionNamespace)
+                            .shadow(color: OpenClawBrand.accent.opacity(0.24), radius: 8, y: 3)
+                    }
                 }
-            }
         }
         .buttonStyle(.plain)
         .accessibilityLabel(tab.accessibilityLabel)
@@ -197,75 +203,82 @@ struct ConnectedFamilyAgentShell: View {
         .accessibilityIdentifier("FamilyAgent.Tab.\(tab.rawValue.capitalized)")
     }
 
-    private func starterSurface(
-        title: LocalizedStringKey,
-        subtitle: LocalizedStringKey,
-        symbol: String,
-        cards: [FamilyAgentStarterCard]) -> some View
-    {
+    private func domainSurface(tab: ConnectedFamilyAgentTab, kind: FamilyRecordKind) -> some View {
         NavigationStack {
-            ScrollView {
-                LazyVStack(spacing: 14) {
-                    ForEach(cards) { card in
-                        Button {
-                            self.openChat(prompt: card.prompt)
-                        } label: {
-                            ProCard(padding: 16) {
-                                HStack(alignment: .top, spacing: 12) {
-                                    Image(systemName: "arrow.up.right.bubble.fill")
-                                        .font(.system(size: 20, weight: .semibold))
-                                        .foregroundStyle(OpenClawBrand.accent)
-                                        .accessibilityHidden(true)
-                                    VStack(alignment: .leading, spacing: 5) {
-                                        Text(card.title)
-                                            .font(OpenClawType.headline)
-                                            .foregroundStyle(.primary)
-                                        Text(card.detail)
-                                            .font(OpenClawType.subhead)
-                                            .foregroundStyle(.secondary)
-                                            .multilineTextAlignment(.leading)
-                                        Text("Open chat")
-                                            .font(OpenClawType.captionSemiBold)
-                                            .foregroundStyle(OpenClawBrand.accent)
-                                            .lineLimit(1)
-                                            .minimumScaleFactor(0.75)
-                                            .fixedSize(horizontal: true, vertical: false)
-                                    }
-                                    Spacer(minLength: 0)
-                                }
+            Group {
+                let records = self.records(kind: kind)
+                if records.isEmpty {
+                    self.emptyDomainSurface(tab: tab)
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            ForEach(records, id: \.id) { record in
+                                FamilyDomainRecordCard(record: record, fallbackTitle: tab.title)
                             }
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("FamilyAgent.\(self.selectedTab.rawValue).\(card.id)")
+                        .padding(.horizontal, OpenClawProMetric.pagePadding)
+                        .padding(.vertical, 14)
+                        .padding(.bottom, OpenClawProMetric.bottomScrollInset)
                     }
-
-                    Text(
-                        """
-                        These are chat starters. Family does not save a separate feed, ideas list, goals list, or \
-                        artifact library here yet.
-                        """)
-                        .font(OpenClawType.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 4)
                 }
-                .padding(.horizontal, OpenClawProMetric.pagePadding)
-                .padding(.vertical, 14)
-                .padding(.bottom, OpenClawProMetric.bottomScrollInset)
             }
             .background(OpenClawProBackground())
+            .refreshable {
+                await self.appModel.refreshFamilyDomain()
+            }
             .navigationTitle("")
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    self.agentHeader(title: title, subtitle: subtitle, symbol: symbol)
+                    self.agentHeader(title: tab.title, subtitle: "", symbol: tab.symbol)
                 }
             }
         }
     }
 
+    @ViewBuilder
+    private func emptyDomainSurface(tab: ConnectedFamilyAgentTab) -> some View {
+        switch self.appModel.familyDomainLoadState {
+        case .idle, .loading:
+            ProgressView {
+                Text("Refreshing ") + Text(verbatim: tab.title)
+            }
+        case let .failed(message):
+            ContentUnavailableView {
+                Label("Couldn’t refresh \(tab.title)", systemImage: "wifi.exclamationmark")
+            } description: {
+                Text(message)
+            } actions: {
+                Button("Try Again") {
+                    Task { await self.appModel.refreshFamilyDomain() }
+                }
+            }
+        case .ready:
+            ContentUnavailableView(
+                "Nothing here yet",
+                systemImage: tab.symbol,
+                description: Text(self.emptyDescription(tab: tab)))
+        }
+    }
+
+    private func records(kind: FamilyRecordKind) -> [FamilyRecord] {
+        let source = self.fixtureEnabled ? ConnectedFamilyAgentShellFixture.records : self.appModel.familyDomainRecords
+        return source
+            .filter { $0.kind == kind && $0.deletedatms == nil }
+            .sorted { $0.updatedatms > $1.updatedatms }
+    }
+
+    private func emptyDescription(tab: ConnectedFamilyAgentTab) -> LocalizedStringKey {
+        switch tab {
+        case .chat: "Start a conversation with your agent."
+        case .feed: "Your agent’s updates will appear here."
+        case .ideas: "Personalized ideas will appear here."
+        case .goals: "Accepted and proposed goals will appear here."
+        case .library: "Artifacts and uploads will appear here."
+        }
+    }
+
     private func agentHeader(
-        title: LocalizedStringKey,
+        title: String,
         subtitle _: LocalizedStringKey,
         symbol _: String) -> some View
     {
@@ -280,15 +293,32 @@ struct ConnectedFamilyAgentShell: View {
                 Text(self.agentName)
                     .font(OpenClawType.subheadSemiBold)
                     .lineLimit(1)
-                Text(title)
+                Text(verbatim: title)
                     .font(OpenClawType.caption2Medium)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Text(self.agentStatus)
+                    .font(OpenClawType.caption2Medium)
+                    .foregroundStyle(self.appModel.gatewayConnected ? OpenClawBrand.accent : Color.secondary)
                     .lineLimit(1)
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text(verbatim: "\(self.agentName), ") + Text(title))
+        .accessibilityLabel(Text(verbatim: "\(self.agentName), \(title)"))
         .accessibilityIdentifier("FamilyAgent.Header")
+    }
+
+    private var agentStatus: String {
+        switch self.appModel.familyDomainLoadState {
+        case .loading: String(localized: "Refreshing")
+        case .failed: String(localized: "Needs connection")
+        case .idle, .ready:
+            if self.appModel.gatewayConnected {
+                String(localized: "Connected")
+            } else {
+                String(localized: "Offline")
+            }
+        }
     }
 
     private var agentName: String {
@@ -324,13 +354,62 @@ private struct FamilyAgentTabBarSurface: ViewModifier {
     }
 }
 
-private struct FamilyAgentStarterCard: Identifiable {
-    let title: LocalizedStringKey
-    let detail: LocalizedStringKey
-    let prompt: String
+private struct FamilyDomainRecordCard: View {
+    let record: FamilyRecord
+    let fallbackTitle: String
 
-    var id: String {
-        self.prompt
+    var body: some View {
+        ProCard(padding: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline) {
+                    self.title
+                        .font(OpenClawType.headline)
+                    Spacer(minLength: 8)
+                    Text(self.lifecycleLabel)
+                        .font(OpenClawType.caption2Medium)
+                        .foregroundStyle(.secondary)
+                        .fixedSize()
+                }
+                if let subtitle = self.payloadString("subtitle") ?? self.payloadString("summary") {
+                    Text(subtitle)
+                        .font(OpenClawType.subhead)
+                        .foregroundStyle(.secondary)
+                }
+                if self.record.visibility == .sharedWithOrganizers {
+                    Label("Shared with family organizers", systemImage: "person.2.fill")
+                        .font(OpenClawType.caption)
+                        .foregroundStyle(OpenClawBrand.accent)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("FamilyAgent.Record.\(self.record.id)")
+    }
+
+    private var title: Text {
+        if let title = self.payloadString("title") {
+            return Text(verbatim: title)
+        }
+        return Text(self.fallbackTitle)
+    }
+
+    private var lifecycleLabel: String {
+        switch self.record.lifecyclestate {
+        case .proposed: String(localized: "Proposed")
+        case .active: String(localized: "Active")
+        case .completed: String(localized: "Completed")
+        case .dismissed: String(localized: "Dismissed")
+        case .archived: String(localized: "Archived")
+        }
+    }
+
+    private func payloadString(_ key: String) -> String? {
+        guard let payload = self.record.payload.value as? [String: AnyCodable],
+              let value = payload[key]?.value as? String
+        else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
     }
 }
 

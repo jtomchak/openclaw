@@ -208,6 +208,18 @@ describe("listGatewayMethods", () => {
       "canvas.document.preview",
       "computer.status",
       "computer.invoke",
+      "family.bootstrap",
+      "family.sync",
+      "family.feed.list",
+      "family.feed.mutate",
+      "family.ideas.list",
+      "family.ideas.mutate",
+      "family.goals.list",
+      "family.goals.mutate",
+      "family.library.list",
+      "family.library.mutate",
+      "family.actions.list",
+      "family.actions.mutate",
     ];
     expect(listGatewayMethods().slice(-expectedSuffix.length)).toEqual(expectedSuffix);
     const methods = listGatewayMethods();
@@ -243,6 +255,18 @@ describe("listGatewayMethods", () => {
       "canvas.document.preview",
       "computer.status",
       "computer.invoke",
+      "family.bootstrap",
+      "family.sync",
+      "family.feed.list",
+      "family.feed.mutate",
+      "family.ideas.list",
+      "family.ideas.mutate",
+      "family.goals.list",
+      "family.goals.mutate",
+      "family.library.list",
+      "family.library.mutate",
+      "family.actions.list",
+      "family.actions.mutate",
     ]);
   });
 
@@ -405,6 +429,18 @@ describe("listGatewayMethods", () => {
       "canvas.document.preview",
       "computer.status",
       "computer.invoke",
+      "family.bootstrap",
+      "family.sync",
+      "family.feed.list",
+      "family.feed.mutate",
+      "family.ideas.list",
+      "family.ideas.mutate",
+      "family.goals.list",
+      "family.goals.mutate",
+      "family.library.list",
+      "family.library.mutate",
+      "family.actions.list",
+      "family.actions.mutate",
     ];
     expect(coreMethods.slice(-expectedCoreSuffix.length)).toEqual(expectedCoreSuffix);
     expect(methods.indexOf("approval.get")).toBeGreaterThan(methods.indexOf("tts.speak"));
