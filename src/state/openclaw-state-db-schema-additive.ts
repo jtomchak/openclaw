@@ -114,6 +114,16 @@ export function ensureAgentInvitationsSchema(database: DatabaseSync): void {
   ); // sqlite-allow-raw -- Canonical lazy additive DDL; invitation rows use Kysely.
 }
 
+/** Lazily installs the profile-and-agent-scoped Family domain owner. */
+export function ensureFamilyDomainSchema(database: DatabaseSync): void {
+  database.exec(
+    extractSqliteTableSchema(OPENCLAW_STATE_SCHEMA_SQL, "family_records", {
+      endMarker: "ON family_mutations(agent_id, profile_id, created_at_ms);",
+      errorMessage: "OpenClaw Family domain schema marker is missing.",
+    }),
+  ); // sqlite-allow-raw -- Canonical lazy additive DDL; records use Kysely.
+}
+
 /** Lazily installs the Gateway's installation-local config revision key owner. */
 export function ensureConfigRevisionKeySchema(database: DatabaseSync): void {
   database.exec(

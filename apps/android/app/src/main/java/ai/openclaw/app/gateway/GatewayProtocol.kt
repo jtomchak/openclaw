@@ -948,6 +948,18 @@ enum class GatewayMethod(
   CanvasDocumentPreview("canvas.document.preview"),
   ComputerStatus("computer.status"),
   ComputerInvoke("computer.invoke"),
+  FamilyBootstrap("family.bootstrap"),
+  FamilySync("family.sync"),
+  FamilyFeedList("family.feed.list"),
+  FamilyFeedMutate("family.feed.mutate"),
+  FamilyIdeasList("family.ideas.list"),
+  FamilyIdeasMutate("family.ideas.mutate"),
+  FamilyGoalsList("family.goals.list"),
+  FamilyGoalsMutate("family.goals.mutate"),
+  FamilyLibraryList("family.library.list"),
+  FamilyLibraryMutate("family.library.mutate"),
+  FamilyActionsList("family.actions.list"),
+  FamilyActionsMutate("family.actions.mutate"),
 }
 
 enum class GatewayEvent(

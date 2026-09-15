@@ -663,6 +663,45 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_invitations_active_device
   ON agent_invitations(device_id)
   WHERE state = 'active' AND device_id IS NOT NULL;
 
+-- Family consumption records are scoped by both the authenticated profile and
+-- its Gateway-assigned agent. Tombstones remain rows so cursor sync cannot
+-- resurrect content on an offline device.
+CREATE TABLE IF NOT EXISTS family_records (
+  record_id TEXT NOT NULL,
+  agent_id TEXT NOT NULL,
+  profile_id TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('feed_item', 'idea', 'goal', 'library_item', 'action_request')),
+  revision INTEGER NOT NULL CHECK (revision >= 1),
+  change_sequence INTEGER NOT NULL CHECK (change_sequence >= 1),
+  visibility TEXT NOT NULL CHECK (visibility IN ('private', 'shared_with_organizers')),
+  lifecycle_state TEXT NOT NULL CHECK (lifecycle_state IN ('proposed', 'active', 'completed', 'dismissed', 'archived')),
+  provenance_json TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  deleted_at_ms INTEGER,
+  PRIMARY KEY (agent_id, profile_id, record_id)
+) STRICT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_family_records_scope_sequence
+  ON family_records(agent_id, profile_id, change_sequence);
+
+CREATE INDEX IF NOT EXISTS idx_family_records_scope_kind_sequence
+  ON family_records(agent_id, profile_id, kind, change_sequence);
+
+CREATE TABLE IF NOT EXISTS family_mutations (
+  agent_id TEXT NOT NULL,
+  profile_id TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  request_hash TEXT NOT NULL,
+  result_json TEXT NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  PRIMARY KEY (agent_id, profile_id, idempotency_key)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_family_mutations_scope_created
+  ON family_mutations(agent_id, profile_id, created_at_ms);
+
 CREATE TABLE IF NOT EXISTS device_bootstrap_tokens (
   token_key TEXT NOT NULL PRIMARY KEY,
   token TEXT NOT NULL,

@@ -76,6 +76,8 @@ export const LAZY_ADDITIVE_STATE_TABLES = [
   "user_preferences",
   "device_pair_setup_completions",
   "agent_invitations",
+  "family_records",
+  "family_mutations",
   "github_publication_requests",
   "device_pairing_join_codes",
   "skill_workshop_proposal_events",
@@ -92,6 +94,9 @@ export const LAZY_ADDITIVE_STATE_INDEXES = [
   "idx_github_publication_requests_pending",
   "idx_agent_invitations_expiry",
   "idx_agent_invitations_active_device",
+  "idx_family_records_scope_sequence",
+  "idx_family_records_scope_kind_sequence",
+  "idx_family_mutations_scope_created",
   "secret_store_entries_live_idx",
   "idx_skill_workshop_collection_reviews_owner_time",
 ] as const;

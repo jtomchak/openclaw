@@ -27,12 +27,44 @@ struct ConnectedFamilyAgentShellTests {
         #expect(ConnectedFamilyAgentTab.allCases == [.chat, .feed, .ideas, .goals, .library])
 
         let source = try Self.source("Sources/ConnectedFamilyAgentShell.swift")
-        #expect(source.contains("ChatProTab(openSettings: nil)"))
-        #expect(source.contains("requestFamilyAgentChat(prompt: prompt)"))
-        #expect(source.contains("Family does not save a separate feed"))
+        #expect(source.contains("ChatProTab("))
+        #expect(source.contains("accessibilityIdentifier: \"FamilyAgent.Chats\""))
+        #expect(source.contains("openSettings: nil"))
+        #expect(source.contains("domainSurface(tab: .feed, kind: .feedItem)"))
+        #expect(source.contains("domainSurface(tab: .ideas, kind: .idea)"))
+        #expect(source.contains("domainSurface(tab: .goals, kind: .goal)"))
+        #expect(source.contains("domainSurface(tab: .library, kind: .libraryItem)"))
+        #expect(source.contains("FamilyDomainRecordCard"))
+        #expect(!source.contains("Family does not save a separate feed"))
         #expect(!source.contains("SettingsProTab("))
         #expect(!source.contains("RootSidebar("))
         #expect(!source.contains("AgentProTab("))
+    }
+
+    @Test func `family domain loads only for a verified assignment`() throws {
+        let source = try Self.source("Sources/Model/NodeAppModel+FamilyDomain.swift")
+
+        #expect(source.contains("guard self.isConnectedFamilyAgentLocked"))
+        #expect(source.contains("method: \"family.bootstrap\""))
+        #expect(source.contains("familyDomainCapabilities = result.capabilities"))
+        #expect(source.contains("filter { $0.deletedatms == nil }"))
+    }
+
+    @Test func `family domain interactions preserve gateway authority`() throws {
+        let modelSource = try Self.source("Sources/Model/NodeAppModel+FamilyDomain.swift")
+        let shellSource = try Self.source("Sources/ConnectedFamilyAgentShell.swift")
+
+        #expect(modelSource.contains("guard self.isConnectedFamilyAgentLocked"))
+        #expect(modelSource.contains("expectedRevision"))
+        #expect(modelSource.contains("idempotencyKey"))
+        #expect(modelSource.contains("family.actions.mutate"))
+        #expect(shellSource.contains("Discuss in Main Chat"))
+        #expect(shellSource.contains("Accept goal"))
+        #expect(shellSource.contains("Confirm complete"))
+        #expect(shellSource.contains("Delete from Library"))
+        #expect(shellSource.contains("FamilyActionCenterSheet"))
+        #expect(shellSource.contains("loadChatSessionRoster(limit: 200)"))
+        #expect(!shellSource.contains("selectedAgentId ="))
     }
 
     @Test func `family product never exposes the OpenClaw admin shell`() throws {
@@ -116,6 +148,7 @@ struct ConnectedFamilyAgentShellTests {
         #expect(source.contains(".background(.ultraThinMaterial, in: Capsule())"))
         #expect(source.contains(".matchedGeometryEffect(id: \"FamilyAgent.Tab.Selection\""))
         #expect(source.contains(".accessibilityAddTraits(self.selectedTab == tab ? .isSelected : [])"))
+        #expect(!source.contains("Text(tab.title)"))
         #expect(!source.contains("Divider()\n            self.tabBar"))
         #expect(!source.contains(".background(.bar)"))
     }

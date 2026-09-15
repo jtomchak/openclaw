@@ -52,6 +52,13 @@ private enum GatewayConnectionWaitOwner {
 @Observable
 // swiftlint:disable type_body_length file_length
 final class NodeAppModel {
+    enum FamilyDomainLoadState: Equatable {
+        case idle
+        case loading
+        case ready
+        case failed(String)
+    }
+
     enum ConnectedFamilyAgentState: Equatable {
         case disconnected
         case verifying
@@ -619,6 +626,10 @@ final class NodeAppModel {
     private var completedPendingForegroundActionIDsByGateway: [String: Set<String>] = [:]
 
     var gatewayConnected = false
+    var familyDomainRecords: [FamilyRecord] = []
+    var familyDomainCapabilities: [String] = []
+    var familyDomainCursor: String?
+    var familyDomainLoadState: FamilyDomainLoadState = .idle
     private var operatorConnected = false {
         didSet {
             if oldValue != self.operatorConnected { self.operatorAuthorityGeneration &+= 1 }
