@@ -1,4 +1,5 @@
 import Foundation
+import OpenClawChatUI
 import OpenClawProtocol
 import SwiftUI
 
@@ -118,6 +119,10 @@ enum ConnectedFamilyAgentShellFixture {
 struct ConnectedFamilyAgentShell: View {
     @Environment(NodeAppModel.self) private var appModel
     @State private var selectedTab: ConnectedFamilyAgentTab
+    @State private var selectedRecord: FamilyRecordSelection?
+    @State private var showsActionCenter = false
+    @State private var showsChatSwitcher = false
+    @State private var interactionError: String?
     @Namespace private var tabSelectionNamespace
     private let fixtureEnabled: Bool
 
@@ -139,6 +144,36 @@ struct ConnectedFamilyAgentShell: View {
                     await self.appModel.refreshFamilyDomain()
                 }
             }
+            .sheet(item: self.$selectedRecord) { selection in
+                FamilyRecordDetailSheet(
+                    record: selection.record,
+                    discuss: { self.discuss(selection.record) },
+                    mutate: { state, operation in
+                        await self.mutate(selection.record, state: state, operation: operation)
+                    })
+            }
+            .sheet(isPresented: self.$showsActionCenter) {
+                FamilyActionCenterSheet(
+                    records: self.records(kind: .actionRequest),
+                    respond: { record, state in
+                        await self.mutate(record, state: state, operation: .update)
+                    })
+            }
+            .sheet(isPresented: self.$showsChatSwitcher) {
+                FamilyChatSwitcher { sessionKey in
+                    self.appModel.openChat(sessionKey: sessionKey)
+                    self.selectedTab = .chat
+                    self.showsChatSwitcher = false
+                }
+            }
+            .alert("Couldn’t update Family", isPresented: Binding(
+                get: { self.interactionError != nil },
+                set: { if !$0 { self.interactionError = nil } }))
+            {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(self.interactionError ?? "")
+            }
     }
 
     @ViewBuilder
@@ -146,7 +181,13 @@ struct ConnectedFamilyAgentShell: View {
         switch self.selectedTab {
         case .chat:
             NavigationStack {
-                ChatProTab(openSettings: nil)
+                ChatProTab(
+                    headerSidebarAction: OpenClawSidebarHeaderAction(
+                        systemName: "line.3.horizontal",
+                        accessibilityLabel: .localized("Chats"),
+                        accessibilityIdentifier: "FamilyAgent.Chats",
+                        action: { self.showsChatSwitcher = true }),
+                    openSettings: nil)
             }
         case .feed:
             self.domainSurface(tab: .feed, kind: .feedItem)
@@ -213,7 +254,12 @@ struct ConnectedFamilyAgentShell: View {
                     ScrollView {
                         LazyVStack(spacing: 12) {
                             ForEach(records, id: \.id) { record in
-                                FamilyDomainRecordCard(record: record, fallbackTitle: tab.title)
+                                Button {
+                                    self.selectedRecord = FamilyRecordSelection(record: record)
+                                } label: {
+                                    FamilyDomainRecordCard(record: record, fallbackTitle: tab.title)
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                         .padding(.horizontal, OpenClawProMetric.pagePadding)
@@ -228,11 +274,43 @@ struct ConnectedFamilyAgentShell: View {
             }
             .navigationTitle("")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        self.showsChatSwitcher = true
+                    } label: {
+                        Image(systemName: "line.3.horizontal")
+                    }
+                    .accessibilityLabel("Chats")
+                }
                 ToolbarItem(placement: .principal) {
                     self.agentHeader(title: tab.title, subtitle: "", symbol: tab.symbol)
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        self.showsActionCenter = true
+                    } label: {
+                        Image(systemName: "checkmark.bubble")
+                            .overlay(alignment: .topTrailing) {
+                                if self.actionCount > 0 {
+                                    Text(verbatim: "\(min(self.actionCount, 9))")
+                                        .font(OpenClawType.caption2Medium)
+                                        .foregroundStyle(.white)
+                                        .padding(3)
+                                        .background(OpenClawBrand.accent, in: Circle())
+                                        .offset(x: 8, y: -8)
+                                }
+                            }
+                    }
+                    .accessibilityLabel("Action Center")
+                    .accessibilityValue(
+                        self.actionCount == 0 ? "No unresolved decisions" : "\(self.actionCount) unresolved")
+                }
             }
         }
+    }
+
+    private var actionCount: Int {
+        self.records(kind: .actionRequest).count { $0.lifecyclestate == .proposed || $0.lifecyclestate == .active }
     }
 
     @ViewBuilder
@@ -335,6 +413,36 @@ struct ConnectedFamilyAgentShell: View {
         self.appModel.requestFamilyAgentChat(prompt: prompt)
         self.selectedTab = .chat
     }
+
+    private func discuss(_ record: FamilyRecord) {
+        let reference = "[Family \(record.kind.rawValue) id=\(record.id) revision=\(record.revision)]"
+        self.openChat(prompt: "Let’s discuss \(reference).")
+        self.selectedRecord = nil
+    }
+
+    private func mutate(
+        _ record: FamilyRecord,
+        state: FamilyRecordLifecycleState,
+        operation: FamilyMutationOperation) async
+    {
+        do {
+            _ = try await self.appModel.mutateFamilyRecord(
+                record,
+                lifecycleState: state,
+                operation: operation)
+            self.selectedRecord = nil
+        } catch {
+            self.interactionError = error.localizedDescription
+        }
+    }
+}
+
+private struct FamilyRecordSelection: Identifiable {
+    let record: FamilyRecord
+
+    var id: String {
+        self.record.id
+    }
 }
 
 private struct FamilyAgentTabBarSurface: ViewModifier {
@@ -406,6 +514,254 @@ private struct FamilyDomainRecordCard: View {
 
     private func payloadString(_ key: String) -> String? {
         guard let payload = self.record.payload.value as? [String: AnyCodable],
+              let value = payload[key]?.value as? String
+        else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+}
+
+private struct FamilyRecordDetailSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let record: FamilyRecord
+    let discuss: () -> Void
+    let mutate: (FamilyRecordLifecycleState, FamilyMutationOperation) async -> Void
+    @State private var isWorking = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    Text(verbatim: self.record.familyTitle)
+                        .font(OpenClawType.title2)
+                    if let summary = self.record.familyPayloadString("summary") {
+                        Text(verbatim: summary)
+                            .font(OpenClawType.body)
+                            .foregroundStyle(.secondary)
+                    }
+                    self.actions
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(OpenClawProMetric.pagePadding)
+            }
+            .background(OpenClawProBackground())
+            .navigationTitle(self.sectionTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { self.dismiss() }
+                }
+            }
+            .disabled(self.isWorking)
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    @ViewBuilder
+    private var actions: some View {
+        if self.record.kind == .feedItem || self.record.kind == .idea || self.record.kind == .libraryItem {
+            Button {
+                self.discuss()
+            } label: {
+                Label(
+                    self.record.kind == .libraryItem ? "Ask agent to revise" : "Discuss in Main Chat",
+                    systemImage: "bubble.left.fill")
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        if self.record.kind == .idea, self.record.lifecyclestate == .proposed {
+            self.mutationButton("Save idea", systemImage: "bookmark.fill", state: .active)
+        }
+        if self.record.kind == .goal, self.record.lifecyclestate == .proposed {
+            self.mutationButton("Accept goal", systemImage: "checkmark.circle.fill", state: .active)
+        }
+        if self.record.kind == .goal, self.record.lifecyclestate == .active {
+            self.mutationButton("Confirm complete", systemImage: "checkmark.seal.fill", state: .completed)
+        }
+        if self.record.kind == .feedItem {
+            self.mutationButton("Dismiss", systemImage: "xmark", state: .dismissed)
+        }
+        if self.record.kind == .libraryItem {
+            Button(role: .destructive) {
+                self.performMutation(state: .archived, operation: .delete)
+            } label: {
+                Label("Delete from Library", systemImage: "trash")
+            }
+        }
+    }
+
+    private func mutationButton(
+        _ title: LocalizedStringKey,
+        systemImage: String,
+        state: FamilyRecordLifecycleState) -> some View
+    {
+        Button {
+            self.performMutation(state: state, operation: .update)
+        } label: {
+            Label(title, systemImage: systemImage)
+        }
+        .buttonStyle(.bordered)
+    }
+
+    private func performMutation(
+        state: FamilyRecordLifecycleState,
+        operation: FamilyMutationOperation)
+    {
+        self.isWorking = true
+        Task {
+            await self.mutate(state, operation)
+            self.isWorking = false
+        }
+    }
+
+    private var sectionTitle: String {
+        switch self.record.kind {
+        case .feedItem: String(localized: "Feed")
+        case .idea: String(localized: "Idea")
+        case .goal: String(localized: "Goal")
+        case .libraryItem: String(localized: "Library")
+        case .actionRequest: String(localized: "Action")
+        }
+    }
+}
+
+private struct FamilyActionCenterSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let records: [FamilyRecord]
+    let respond: (FamilyRecord, FamilyRecordLifecycleState) async -> Void
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if self.records.isEmpty {
+                    ContentUnavailableView(
+                        "No decisions waiting",
+                        systemImage: "checkmark.circle",
+                        description: Text("Your agent will put approvals and proposals here."))
+                } else {
+                    ForEach(self.records, id: \.id) { record in
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(verbatim: record.familyTitle)
+                                .font(OpenClawType.headline)
+                            if let summary = record.familyPayloadString("summary") {
+                                Text(verbatim: summary)
+                                    .font(OpenClawType.subhead)
+                                    .foregroundStyle(.secondary)
+                            }
+                            HStack {
+                                Button("Approve") { Task { await self.respond(record, .completed) } }
+                                    .buttonStyle(.borderedProminent)
+                                Button("Not now", role: .cancel) { Task { await self.respond(record, .dismissed) } }
+                                    .buttonStyle(.bordered)
+                            }
+                        }
+                        .padding(.vertical, 6)
+                    }
+                }
+            }
+            .navigationTitle("Action Center")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { self.dismiss() }
+                }
+            }
+        }
+    }
+}
+
+private struct FamilyChatSwitcher: View {
+    @Environment(NodeAppModel.self) private var appModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var sessions: [OpenClawChatSessionEntry] = []
+    @State private var query = ""
+    @State private var newChatName = ""
+    @State private var errorText: String?
+    let select: (String?) -> Void
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Button {
+                        self.select(nil)
+                    } label: {
+                        Label("Main Chat", systemImage: "bubble.left.and.bubble.right.fill")
+                    }
+                }
+                Section("Side chats") {
+                    ForEach(self.filteredSessions, id: \.key) { session in
+                        Button {
+                            self.select(session.key)
+                        } label: {
+                            Text(verbatim: self.displayName(session.key))
+                                .lineLimit(1)
+                        }
+                    }
+                    if self.filteredSessions.isEmpty {
+                        Text("No matching side chats")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Section("Start a side chat") {
+                    TextField("Topic", text: self.$newChatName)
+                    Button("Create") {
+                        let normalized = self.newChatName.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !normalized.isEmpty else { return }
+                        self.select("family-side-\(self.slug(normalized))-\(UUID().uuidString.lowercased().prefix(8))")
+                    }
+                    .disabled(self.newChatName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+                if let errorText {
+                    Section {
+                        Text(verbatim: errorText)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .searchable(text: self.$query, prompt: "Search chats")
+            .navigationTitle("Chats")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { self.dismiss() }
+                }
+            }
+            .task { await self.loadSessions() }
+        }
+    }
+
+    private var filteredSessions: [OpenClawChatSessionEntry] {
+        self.sessions.filter { session in
+            session.key != self.appModel.mainSessionKey &&
+                (self.query.isEmpty || self.displayName(session.key).localizedCaseInsensitiveContains(self.query))
+        }
+    }
+
+    private func loadSessions() async {
+        do {
+            self.sessions = try await self.appModel.loadChatSessionRoster(limit: 200).sessions
+        } catch {
+            self.errorText = error.localizedDescription
+        }
+    }
+
+    private func displayName(_ key: String) -> String {
+        let value = key.split(separator: ":").last.map(String.init) ?? key
+        return value.replacingOccurrences(of: "family-side-", with: "")
+    }
+
+    private func slug(_ value: String) -> String {
+        let slug = value.lowercased().map { $0.isLetter || $0.isNumber ? $0 : "-" }
+        return String(slug).split(separator: "-").filter { !$0.isEmpty }.joined(separator: "-")
+    }
+}
+
+extension FamilyRecord {
+    fileprivate var familyTitle: String {
+        self.familyPayloadString("title") ?? String(localized: "Untitled")
+    }
+
+    fileprivate func familyPayloadString(_ key: String) -> String? {
+        guard let payload = self.payload.value as? [String: AnyCodable],
               let value = payload[key]?.value as? String
         else { return nil }
         let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)

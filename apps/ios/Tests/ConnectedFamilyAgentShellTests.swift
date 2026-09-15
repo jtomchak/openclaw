@@ -27,7 +27,9 @@ struct ConnectedFamilyAgentShellTests {
         #expect(ConnectedFamilyAgentTab.allCases == [.chat, .feed, .ideas, .goals, .library])
 
         let source = try Self.source("Sources/ConnectedFamilyAgentShell.swift")
-        #expect(source.contains("ChatProTab(openSettings: nil)"))
+        #expect(source.contains("ChatProTab("))
+        #expect(source.contains("accessibilityIdentifier: \"FamilyAgent.Chats\""))
+        #expect(source.contains("openSettings: nil"))
         #expect(source.contains("domainSurface(tab: .feed, kind: .feedItem)"))
         #expect(source.contains("domainSurface(tab: .ideas, kind: .idea)"))
         #expect(source.contains("domainSurface(tab: .goals, kind: .goal)"))
@@ -46,6 +48,23 @@ struct ConnectedFamilyAgentShellTests {
         #expect(source.contains("method: \"family.bootstrap\""))
         #expect(source.contains("familyDomainCapabilities = result.capabilities"))
         #expect(source.contains("filter { $0.deletedatms == nil }"))
+    }
+
+    @Test func `family domain interactions preserve gateway authority`() throws {
+        let modelSource = try Self.source("Sources/Model/NodeAppModel+FamilyDomain.swift")
+        let shellSource = try Self.source("Sources/ConnectedFamilyAgentShell.swift")
+
+        #expect(modelSource.contains("guard self.isConnectedFamilyAgentLocked"))
+        #expect(modelSource.contains("expectedRevision"))
+        #expect(modelSource.contains("idempotencyKey"))
+        #expect(modelSource.contains("family.actions.mutate"))
+        #expect(shellSource.contains("Discuss in Main Chat"))
+        #expect(shellSource.contains("Accept goal"))
+        #expect(shellSource.contains("Confirm complete"))
+        #expect(shellSource.contains("Delete from Library"))
+        #expect(shellSource.contains("FamilyActionCenterSheet"))
+        #expect(shellSource.contains("loadChatSessionRoster(limit: 200)"))
+        #expect(!shellSource.contains("selectedAgentId ="))
     }
 
     @Test func `family product never exposes the OpenClaw admin shell`() throws {
