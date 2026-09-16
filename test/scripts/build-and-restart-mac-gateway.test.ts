@@ -90,12 +90,7 @@ fi`,
   writeExecutable(join(bin, "curl"), `printf '{"ready":true,"failing":[]}\\n'`);
   writeExecutable(join(bin, "lsof"), "exit 0");
   writeExecutable(
-    join(bin, "corepack"),
-    `[[ "$1 $2 $4" == "enable --install-directory pnpm" ]]
-ln -s "$FIXTURE/bin/selected-pnpm" "$3/pnpm"`,
-  );
-  writeExecutable(
-    join(bin, "selected-pnpm"),
+    join(bin, "pnpm"),
     `case "$1" in
   install) exit 0 ;;
   build)

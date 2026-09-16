@@ -60,9 +60,11 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ "$(uname -s)" == Darwin ]] || fail "this workflow requires macOS launchd"
-for command_name in corepack curl git launchctl lsof node plutil; do
+for command_name in curl git launchctl lsof node plutil pnpm; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
+pnpm_path="$(command -v pnpm)"
+[[ -x "$pnpm_path" ]] || fail "pnpm is not executable: $pnpm_path"
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "$repo_root"
@@ -135,7 +137,6 @@ if ! mkdir "$lock_dir" 2>/dev/null; then
 fi
 
 scratch_dir="$(mktemp -d "${TMPDIR:-/tmp}/openclaw-build-restart.XXXXXX")"
-pnpm_dir="$scratch_dir/pnpm"
 snapshot_index="$scratch_dir/index"
 candidate_dir=""
 activation_started=0
@@ -241,15 +242,11 @@ mkdir -p "$release_root/releases"
 log "materializing tracked snapshot $snapshot_short"
 git worktree add --detach "$candidate_dir" "$snapshot_commit"
 
-mkdir -p "$pnpm_dir"
-corepack enable --install-directory "$pnpm_dir" pnpm >/dev/null
-[[ -x "$pnpm_dir/pnpm" ]] || fail "Corepack did not create a private pnpm launcher"
 run_pnpm() (
   export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-  export PATH="$pnpm_dir:$PATH"
   export NPM_CONFIG_WORKSPACE_DIR="$PWD" npm_config_workspace_dir="$PWD"
   export PNPM_CONFIG_LOCKFILE_DIR="$PWD" pnpm_config_lockfile_dir="$PWD"
-  "$pnpm_dir/pnpm" "$@"
+  "$pnpm_path" "$@"
 )
 
 log "installing candidate dependencies"
