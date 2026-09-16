@@ -171,12 +171,14 @@ struct ChatGatewayRequestTests {
             includeGlobal: false,
             spawnedBy: " agent:main:parent ",
             offset: 10000,
-            configuredAgentsOnly: true)
+            configuredAgentsOnly: true,
+            includeDerivedTitles: true)
 
         #expect(request.params["includeGlobal"]?.value as? Bool == false)
         #expect(request.params["spawnedBy"]?.value as? String == "agent:main:parent")
         #expect(request.params["offset"]?.value as? Int == 10000)
         #expect(request.params["configuredAgentsOnly"]?.value as? Bool == true)
+        #expect(request.params["includeDerivedTitles"]?.value as? Bool == true)
     }
 
     @Test func `session patch request preserves explicit null clearing`() {

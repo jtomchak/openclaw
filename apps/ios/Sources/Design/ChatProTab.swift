@@ -44,6 +44,9 @@ struct ChatProTab: View {
     @State private var showsBackgroundTasks = false
     @State private var showsNewSessionOptions = false
     @State private var showsChatActions = false
+    @State private var showsFamilyRename = false
+    @State private var showsFamilyDeleteConfirmation = false
+    @State private var familyRenameText = ""
     @State private var pendingChatAction: PendingChatAction?
     // Transport can start unscoped while the UI uses its "main" fallback.
     // Track the real agent so gateway metadata replaces the captured transport.
@@ -168,7 +171,7 @@ struct ChatProTab: View {
                         self.headerGatewayStatus
                     }
                 }
-                if !self.appModel.isConnectedFamilyAgentLocked {
+                if !self.familyPresentation, !self.appModel.isConnectedFamilyAgentLocked {
                     if #available(iOS 26.0, *) {
                         ToolbarItem(placement: .topBarTrailing) {
                             self.chatActionsMenu
@@ -178,6 +181,10 @@ struct ChatProTab: View {
                         ToolbarItem(placement: .topBarTrailing) {
                             self.chatActionsMenu
                         }
+                    }
+                } else if self.familyPresentation {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        self.familyChatMenu
                     }
                 }
             }
@@ -208,6 +215,30 @@ struct ChatProTab: View {
                 Text("OpenClaw could not prepare the Markdown file.")
                     .font(OpenClawType.body)
             }
+            .alert("Rename Chat", isPresented: self.$showsFamilyRename) {
+                    TextField("Chat name", text: self.$familyRenameText)
+                    Button("Rename") {
+                        guard let session = self.viewModel?.currentSessionEntry() else { return }
+                        self.viewModel?.renameSession(
+                            key: session.key,
+                            label: self.familyRenameText,
+                            agentID: session.agentId)
+                    }
+                    Button("Cancel", role: .cancel) {}
+                }
+                .confirmationDialog(
+                    "Delete this chat?",
+                    isPresented: self.$showsFamilyDeleteConfirmation,
+                    titleVisibility: .visible)
+                {
+                    Button("Delete Chat", role: .destructive) {
+                        guard let session = self.viewModel?.currentSessionEntry() else { return }
+                        self.viewModel?.deleteSession(session.key, agentID: session.agentId)
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("The chat and its transcript will be removed from the gateway.")
+                }
     }
 
     @ViewBuilder
@@ -226,8 +257,8 @@ struct ChatProTab: View {
                 composerChrome: .clean,
                 liveActivityPresentation: self.familyPresentation ? .typingIndicatorOnly : .detailed,
                 contentBottomInset: self.contentBottomInset,
-                isComposerEnabled: self.gatewayConnected || self.canQueueOffline,
-                isAttachmentInputEnabled: self.gatewayConnected || self.canQueueOffline,
+                isComposerEnabled: self.gatewayConnected || (!self.familyPresentation && self.canQueueOffline),
+                isAttachmentInputEnabled: self.gatewayConnected || (!self.familyPresentation && self.canQueueOffline),
                 messagePlaceholder: self.messagePlaceholder,
                 emptyAssistantIntro: String(localized: "What would you like to work on?"),
                 emptyAssistantPrompts: Self.emptyAssistantPrompts,
@@ -366,7 +397,12 @@ struct ChatProTab: View {
                         .lineLimit(1)
                         .transition(.opacity)
                 }
-                if let session = self.coloredHeaderSession {
+                if self.familyPresentation, let status = self.activeFamilyAgentStatus {
+                    Text(verbatim: status)
+                        .font(OpenClawType.captionMedium)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                } else if let session = self.coloredHeaderSession {
                     self.headerSessionTitle(session)
                 }
             }
@@ -940,6 +976,29 @@ struct ChatProTab: View {
         self.isAttachmentOwnerPinned ? self.viewModelPresentationAgentBadge : self.currentAgentBadge
     }
 
+    nonisolated static let emptyAssistantPrompts: [OpenClawChatView.StarterPrompt] = [
+        OpenClawChatView.StarterPrompt(
+            id: "summarize-status",
+            title: String(localized: "Check OpenClaw status"),
+            prompt: String(localized: "Summarize the current OpenClaw status and tell me what needs attention.")),
+        OpenClawChatView.StarterPrompt(
+            id: "show-controls",
+            title: String(localized: "What can I control here?"),
+            prompt: String(localized: "Show me which phone controls and device capabilities are available right now.")),
+        OpenClawChatView.StarterPrompt(
+            id: "start-voice",
+            title: String(localized: "Help me start voice chat"),
+            prompt: String(localized: "Help me start a realtime voice session from this phone.")),
+    ]
+
+    private func normalized(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
+extension ChatProTab {
     nonisolated static func initialsBadge(for displayName: String) -> String {
         AgentIdentityPresentation.initialsBadge(for: displayName)
     }
@@ -961,24 +1020,70 @@ struct ChatProTab: View {
         currentOwnerID != nextOwnerID || currentTransportAgentID != nextTransportAgentID
     }
 
-    nonisolated static let emptyAssistantPrompts: [OpenClawChatView.StarterPrompt] = [
-        OpenClawChatView.StarterPrompt(
-            id: "summarize-status",
-            title: String(localized: "Check OpenClaw status"),
-            prompt: String(localized: "Summarize the current OpenClaw status and tell me what needs attention.")),
-        OpenClawChatView.StarterPrompt(
-            id: "show-controls",
-            title: String(localized: "What can I control here?"),
-            prompt: String(localized: "Show me which phone controls and device capabilities are available right now.")),
-        OpenClawChatView.StarterPrompt(
-            id: "start-voice",
-            title: String(localized: "Help me start voice chat"),
-            prompt: String(localized: "Help me start a realtime voice session from this phone.")),
-    ]
+    private var activeFamilyAgentStatus: String? {
+        guard let status = self.viewModel?.currentSessionEntry()?.agentStatus,
+              status.expiresAt > Date().timeIntervalSince1970 * 1000
+        else { return nil }
+        let note = status.note.trimmingCharacters(in: .whitespacesAndNewlines)
+        return note.isEmpty ? nil : note
+    }
 
-    private func normalized(_ value: String?) -> String? {
-        guard let value else { return nil }
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
+    private var familyChatMenu: some View {
+        Menu {
+            if let session = self.viewModel?.currentSessionEntry() {
+                if let timestamp = session.lastActivityAt ?? session.updatedAt {
+                    Text(Date(timeIntervalSince1970: timestamp / 1000).formatted(date: .abbreviated, time: .shortened))
+                }
+                if Self.isFamilySideChat(session) {
+                    self.familySideChatActions(session)
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .frame(width: 44, height: 44)
+        }
+        .accessibilityLabel("Chat options")
+        .accessibilityIdentifier("FamilyAgent.ChatOptions")
+    }
+
+    @ViewBuilder
+    private func familySideChatActions(_ session: OpenClawChatSessionEntry) -> some View {
+        Button {
+            self.familyRenameText = session.label ?? session.displayName ?? session.derivedTitle ?? ""
+            self.showsFamilyRename = true
+        } label: {
+            Label("Rename", systemImage: "pencil")
+        }
+        Button {
+            self.viewModel?.setSessionPinned(
+                key: session.key,
+                pinned: session.pinned != true,
+                agentID: session.agentId)
+        } label: {
+            Label(
+                session.pinned == true ? "Unpin" : "Pin",
+                systemImage: session.pinned == true ? "pin.slash" : "pin")
+        }
+        if session.sessionId?.isEmpty == false,
+           session.hasActiveRun != true,
+           session.hasActiveSubagentRun != true,
+           session.status?.lowercased() != "running"
+        {
+            Button {
+                self.viewModel?.setSessionArchived(session, archived: true)
+            } label: {
+                Label("Archive", systemImage: "archivebox")
+            }
+        }
+        Button(role: .destructive) {
+            self.showsFamilyDeleteConfirmation = true
+        } label: {
+            Label("Delete", systemImage: "trash")
+        }
+    }
+
+    nonisolated static func isFamilySideChat(_ session: OpenClawChatSessionEntry) -> Bool {
+        let key = session.key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return session.isMain != true && key != "main" && key != "global"
     }
 }

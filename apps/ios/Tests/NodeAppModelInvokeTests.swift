@@ -1429,6 +1429,34 @@ private final class TimingOutDeviceStatusService: DeviceStatusServicing {
         #expect(appModel.chatDeliveryAgentId == "family")
     }
 
+    @Test @MainActor func `reconnecting family assignment preserves presentation but not send authority`() {
+        let appModel = NodeAppModel()
+        appModel.applyConnectedFamilyAgentState(.reconnecting(agentID: "family"))
+
+        #expect(appModel.lockedFamilyAgentID == "family")
+        #expect(!appModel.isConnectedFamilyAgentLocked)
+        #expect(appModel.chatSessionKey == "agent:family:main")
+        #expect(appModel.chatDeliveryAgentId == nil)
+
+        appModel.requestFamilyAgentChat(prompt: "Do not queue before revalidation")
+        #expect(appModel.pendingFamilyAgentChatPrompt == nil)
+    }
+
+    @Test func `foreground revalidation keeps a verified family shell mounted`() {
+        #expect(NodeAppModel.connectedFamilyAgentStateWhileRevalidating(
+            .locked(agentID: "family"),
+            familyProductEnabled: true) == .reconnecting(agentID: "family"))
+        #expect(NodeAppModel.connectedFamilyAgentStateWhileRevalidating(
+            .reconnecting(agentID: "family"),
+            familyProductEnabled: true) == .reconnecting(agentID: "family"))
+        #expect(NodeAppModel.connectedFamilyAgentStateWhileRevalidating(
+            .blocked,
+            familyProductEnabled: true) == .verifying)
+        #expect(NodeAppModel.connectedFamilyAgentStateWhileRevalidating(
+            .locked(agentID: "family"),
+            familyProductEnabled: false) == .verifying)
+    }
+
     @Test @MainActor func `unverified family access never admits a chat prompt`() {
         let appModel = NodeAppModel()
 

@@ -121,6 +121,7 @@ enum ConnectedFamilyAgentShellFixture {
 
 struct ConnectedFamilyAgentShell: View {
     @Environment(NodeAppModel.self) private var appModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selectedTab: ConnectedFamilyAgentTab
     @State private var selectedRecord: FamilyRecordSelection?
     @State private var showsActionCenter = false
@@ -143,6 +144,13 @@ struct ConnectedFamilyAgentShell: View {
                 if !self.isKeyboardVisible {
                     self.tabBar
                         .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .overlay(alignment: .top) {
+                if case .reconnecting = self.appModel.connectedFamilyAgentState {
+                    FamilyReconnectIndicator(reduceMotion: self.reduceMotion)
+                        .padding(.top, 8)
+                        .transition(.opacity)
                 }
             }
             .background(OpenClawProBackground())
@@ -700,7 +708,6 @@ private struct FamilyChatSwitcher: View {
     @Environment(\.dismiss) private var dismiss
     @State private var sessions: [OpenClawChatSessionEntry] = []
     @State private var query = ""
-    @State private var newChatName = ""
     @State private var errorText: String?
     let select: (String?) -> Void
 
@@ -729,13 +736,11 @@ private struct FamilyChatSwitcher: View {
                     }
                 }
                 Section("Start a side chat") {
-                    TextField("Topic", text: self.$newChatName)
-                    Button("Create") {
-                        let normalized = self.newChatName.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard !normalized.isEmpty else { return }
-                        self.select("family-side-\(self.slug(normalized))-\(UUID().uuidString.lowercased().prefix(8))")
+                    Button {
+                        self.select("family-side-\(UUID().uuidString.lowercased())")
+                    } label: {
+                        Label("New side chat", systemImage: "square.and.pencil")
                     }
-                    .disabled(self.newChatName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
                 if let errorText {
                     Section {
@@ -764,20 +769,50 @@ private struct FamilyChatSwitcher: View {
 
     private func loadSessions() async {
         do {
-            self.sessions = try await self.appModel.loadChatSessionRoster(limit: 200).sessions
+            self.sessions = try await self.appModel.loadChatSessionRoster(
+                limit: 200,
+                includeDerivedTitles: true).sessions
         } catch {
             self.errorText = error.localizedDescription
         }
     }
 
     private func displayName(_ key: String) -> String {
+        if let session = self.sessions.first(where: { $0.key == key }) {
+            if let title = session.derivedTitle?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !title.isEmpty
+            {
+                return title
+            }
+            let resolved = ChatSessionSidebarModel.displayName(for: session)
+            if resolved != key { return resolved }
+        }
         let value = key.split(separator: ":").last.map(String.init) ?? key
-        return value.replacingOccurrences(of: "family-side-", with: "")
+        return value.hasPrefix("family-side-") ? String(localized: "New Chat") : value
     }
+}
 
-    private func slug(_ value: String) -> String {
-        let slug = value.lowercased().map { $0.isLetter || $0.isNumber ? $0 : "-" }
-        return String(slug).split(separator: "-").filter { !$0.isEmpty }.joined(separator: "-")
+private struct FamilyReconnectIndicator: View {
+    let reduceMotion: Bool
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 0.28, paused: self.reduceMotion)) { context in
+            let phase = self.reduceMotion ? 0 : Int(context.date.timeIntervalSinceReferenceDate / 0.28) % 3
+            HStack(spacing: 5) {
+                ForEach(0..<3, id: \.self) { index in
+                    Circle()
+                        .fill(.secondary)
+                        .frame(width: 5, height: 5)
+                        .opacity(phase == index ? 0.85 : 0.3)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(.ultraThinMaterial, in: Capsule())
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Reconnecting")
+        .allowsHitTesting(false)
     }
 }
 

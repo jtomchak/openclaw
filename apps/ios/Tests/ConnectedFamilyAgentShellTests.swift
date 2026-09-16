@@ -34,6 +34,8 @@ struct ConnectedFamilyAgentShellTests {
         #expect(source.contains("contentBottomInset: self.isKeyboardVisible ? 0 : Self.tabBarReservedHeight"))
         let chatViewSource = try Self.source("../shared/OpenClawKit/Sources/OpenClawChatUI/ChatView.swift")
         #expect(chatViewSource.contains("ChatThreeDotTypingIndicatorBubble"))
+        #expect(source.contains("FamilyReconnectIndicator"))
+        #expect(source.contains("accessibilityLabel(\"Reconnecting\")"))
         #expect(source.contains("domainSurface(tab: .feed, kind: .feedItem)"))
         #expect(source.contains("domainSurface(tab: .ideas, kind: .idea)"))
         #expect(source.contains("domainSurface(tab: .goals, kind: .goal)"))
@@ -67,7 +69,9 @@ struct ConnectedFamilyAgentShellTests {
         #expect(shellSource.contains("Confirm complete"))
         #expect(shellSource.contains("Delete from Library"))
         #expect(shellSource.contains("FamilyActionCenterSheet"))
-        #expect(shellSource.contains("loadChatSessionRoster(limit: 200)"))
+        #expect(shellSource.contains("includeDerivedTitles: true"))
+        #expect(shellSource.contains("New side chat"))
+        #expect(!shellSource.contains("TextField(\"Topic\""))
         #expect(!shellSource.contains("selectedAgentId ="))
     }
 
@@ -78,6 +82,7 @@ struct ConnectedFamilyAgentShellTests {
             from: "private var familyProductContent",
             to: "private var openClawProductContent")
 
+        #expect(familyRoot.contains("case .locked, .reconnecting"))
         #expect(familyRoot.contains("ConnectedFamilyAgentShell()"))
         #expect(familyRoot.contains("FamilyProductWelcomeView(connectionError:"))
         #expect(familyRoot.contains("ConnectedFamilyAgentAccessGate"))
@@ -166,9 +171,9 @@ struct ConnectedFamilyAgentShellTests {
             from: "private var rootContent",
             to: "private var uiTestReadinessMarker")
 
-        #expect(rootContent.contains("case .locked:"))
+        #expect(rootContent.contains("case .locked, .reconnecting:"))
         #expect(rootContent.contains("ConnectedFamilyAgentShell()"))
-        #expect(rootContent.contains("case .verifying, .blocked:"))
+        #expect(rootContent.contains("case .verifying, .blocked, .unrestricted:"))
         #expect(rootContent.contains("ConnectedFamilyAgentAccessGate"))
         #expect(rootContent.contains("case .disconnected, .unrestricted:"))
         #expect(rootContent.contains("self.sidebarSplitContent"))

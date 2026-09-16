@@ -165,7 +165,7 @@ struct RootTabs: View {
     @ViewBuilder
     private var familyProductContent: some View {
         switch self.appModel.connectedFamilyAgentState {
-        case .locked:
+        case .locked, .reconnecting:
             ConnectedFamilyAgentShell()
         case .disconnected:
             FamilyProductWelcomeView(connectionError: self.familyProductConnectionError)
@@ -179,7 +179,7 @@ struct RootTabs: View {
         switch self.appModel.connectedFamilyAgentState {
         case .locked:
             ConnectedFamilyAgentShell()
-        case .verifying, .blocked:
+        case .reconnecting, .verifying, .blocked:
             ConnectedFamilyAgentAccessGate(state: self.appModel.connectedFamilyAgentState)
         case .disconnected, .unrestricted:
             self.sidebarSplitContent
