@@ -16,9 +16,16 @@ interface GatewayFrame {
   type?: string;
 }
 
+interface RelayDevicePrivateKey {
+  crv?: string;
+  d?: string;
+  kty: string;
+  x?: string;
+}
+
 interface RelayDeviceIdentity {
   deviceId: string;
-  privateKey: JsonWebKey;
+  privateKey: RelayDevicePrivateKey;
   publicKey: string;
 }
 
