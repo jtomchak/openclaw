@@ -254,6 +254,8 @@ log "installing candidate dependencies"
 log "building candidate while the current Gateway remains online"
 (cd "$candidate_dir" && OPENCLAW_UPDATE_IN_PROGRESS=1 run_pnpm build)
 (cd "$candidate_dir" && node dist/index.js config validate)
+log "materializing candidate runtime dependencies"
+(cd "$candidate_dir" && run_pnpm install --frozen-lockfile --offline --ignore-scripts)
 
 candidate_entry="$candidate_dir/dist/index.js"
 [[ -f "$candidate_entry" ]] || fail "candidate build did not create dist/index.js"
@@ -265,6 +267,7 @@ node -e '
     process.exit(1);
   }
 ' "$candidate_dir/dist/build-info.json" "$snapshot_commit"
+(cd "$candidate_dir" && node dist/index.js --version >/dev/null)
 
 wrapper_temp="$release_root/bin/.openclaw-gateway-release.$$.tmp"
 cp "$candidate_dir/scripts/lib/run-current-gateway-release.sh" "$wrapper_temp"

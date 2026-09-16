@@ -27,7 +27,7 @@ function runGit(repo: string, args: string[]): void {
   expect(result.status, result.stderr).toBe(0);
 }
 
-function runReleaseFixture(scenario: "success" | "install-failure") {
+function runReleaseFixture(scenario: "success" | "install-failure" | "runtime-invalidated") {
   const root = mkdtempSync(join(tmpdir(), "openclaw-build-restart-"));
   const repo = join(root, "repo");
   const bin = join(root, "bin");
@@ -64,9 +64,13 @@ if (args[0] === "gateway" && args[1] === "install") {
   writeFileSync(
     join(root, "candidate-index.js"),
     `const fs = require("node:fs");
+const path = require("node:path");
 const args = process.argv.slice(2);
 if (args[0] === "config" && args[1] === "validate") process.exit(0);
+const runtimeReady = fs.existsSync(path.join(__dirname, "..", "node_modules", "runtime-ready"));
+if (args[0] === "--version") process.exit(runtimeReady ? 0 : 43);
 if (args[0] === "gateway" && args[1] === "install") {
+  if (!runtimeReady) process.exit(43);
   const wrapper = args[args.indexOf("--wrapper") + 1];
   fs.writeFileSync(${JSON.stringify(stateFile)}, "200|" + wrapper + "\\n");
   if (process.env.SCENARIO === "install-failure") process.exit(42);
@@ -92,7 +96,10 @@ fi`,
   writeExecutable(
     join(bin, "pnpm"),
     `case "$1" in
-  install) exit 0 ;;
+  install)
+    mkdir -p node_modules
+    touch node_modules/runtime-ready
+    ;;
   build)
     grep -F '"releaseMarker":"dirty"' package.json >/dev/null
     [[ "$(<release-marker.txt)" == staged-new-source ]]
@@ -100,6 +107,9 @@ fi`,
     cp "$FIXTURE/candidate-index.js" dist/index.js
     commit="$(git rev-parse HEAD)"
     printf '{"commit":"%s"}\\n' "$commit" > dist/build-info.json
+    if [[ "$SCENARIO" == runtime-invalidated ]]; then
+      rm -f node_modules/runtime-ready
+    fi
     ;;
   *) exit 90 ;;
 esac`,
@@ -197,17 +207,17 @@ describe("build-and-restart macOS Gateway release workflow", () => {
     }
   });
 
-  it.each(["success", "install-failure"] as const)(
+  it.each(["success", "runtime-invalidated", "install-failure"] as const)(
     "activates an immutable release and handles %s",
     (scenario) => {
       const fixture = runReleaseFixture(scenario);
       try {
         expect(fixture.result.status, fixture.result.stdout + fixture.result.stderr).toBe(
-          scenario === "success" ? 0 : 1,
+          scenario === "install-failure" ? 1 : 0,
         );
         expect(existsSync(join(fixture.releaseRoot, "bin", "openclaw-gateway-release"))).toBe(true);
         const selected = realpathSync(join(fixture.releaseRoot, "current"));
-        if (scenario === "success") {
+        if (scenario !== "install-failure") {
           expect(selected).toContain(join(fixture.releaseRoot, "releases"));
           expect(readFileSync(fixture.stateFile, "utf8")).toContain("200|");
           expect(fixture.result.stdout).toContain("OK release=");
