@@ -251,6 +251,7 @@ prepare_swift_package_root() {
 
 clear_peekaboo_edit() {
   local build_path="$1"
+  [[ -e "$build_path/editables/Peekaboo" ]] || return 0
   swift package --scratch-path "$build_path" unedit --force Peekaboo >/dev/null 2>&1 || true
 }
 

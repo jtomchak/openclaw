@@ -597,6 +597,17 @@ function getCompiledPeekabooHelperBlock(): string {
   return script.slice(start, end);
 }
 
+function getClearPeekabooEditHelperBlock(): string {
+  const script = readFileSync(swiftScriptPath, "utf8");
+  const start = script.indexOf("clear_peekaboo_edit() {");
+  const end = script.indexOf("edit_peekaboo_from_snapshot()", start);
+
+  expect(start).toBeGreaterThanOrEqual(0);
+  expect(end).toBeGreaterThan(start);
+
+  return script.slice(start, end);
+}
+
 function runRealCompiledPeekabooHarness(
   mutation:
     | "assume-unchanged"
@@ -2300,6 +2311,31 @@ ${mounts === "failed" ? "exit 1" : mounts === "mounted" ? `printf '/dev/disk9 on
     const mismatched = runRealCompiledPeekabooHarness("none", "e".repeat(40));
     expect(mismatched.status).toBe(1);
     expect(mismatched.stderr).toContain("does not match locked source");
+  });
+
+  it("runs Peekaboo unedit only when SwiftPM has an editable checkout", () => {
+    const root = tempDirs.make("openclaw-peekaboo-unedit-");
+    const tools = path.join(root, "tools");
+    const buildPath = path.join(root, "build");
+    const marker = path.join(root, "swift-invocation");
+    mkdirSync(tools, { recursive: true });
+    mkdirSync(buildPath);
+    const swift = path.join(tools, "swift");
+    writeFileSync(swift, `#!/bin/bash\nprintf '%s\\n' "$*" > ${JSON.stringify(marker)}\n`);
+    chmodSync(swift, 0o755);
+
+    const result = runHelper(`
+      set -euo pipefail
+      PATH=${JSON.stringify(`${tools}:/usr/bin:/bin`)}
+      ${getClearPeekabooEditHelperBlock()}
+      clear_peekaboo_edit ${JSON.stringify(buildPath)}
+      [[ ! -e ${JSON.stringify(marker)} ]]
+      mkdir -p ${JSON.stringify(path.join(buildPath, "editables", "Peekaboo"))}
+      clear_peekaboo_edit ${JSON.stringify(buildPath)}
+      grep -F -- 'package --scratch-path ${buildPath} unedit --force Peekaboo' ${JSON.stringify(marker)}
+    `);
+
+    expect(result.status, result.stderr).toBe(0);
   });
 
   // Each real Git fixture owns a separate checkout and deadline; do not aggregate
