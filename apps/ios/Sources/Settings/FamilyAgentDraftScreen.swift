@@ -264,7 +264,8 @@ struct FamilyAgentDraftScreen: View {
                 self.settingsRow(
                     icon: "cpu",
                     title: "Models",
-                    value: .verbatim(String(localized: "\(self.draft.allowedRoutes.count) routes allowed")))
+                    value: .verbatim(
+                        "\(self.draft.allowedRoutes.count) \(String(localized: "routes allowed"))"))
                 self.rowDivider
                 self.settingsRow(icon: "key.fill", title: "Secure credentials", value: "Gateway only")
                 self.rowDivider

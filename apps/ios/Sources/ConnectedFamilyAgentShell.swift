@@ -344,7 +344,11 @@ struct ConnectedFamilyAgentShell: View {
             }
         case let .failed(message):
             ContentUnavailableView {
-                Label("Couldn’t refresh \(tab.title)", systemImage: "wifi.exclamationmark")
+                Label {
+                    Text("Couldn’t refresh ") + Text(verbatim: tab.title)
+                } icon: {
+                    Image(systemName: "wifi.exclamationmark")
+                }
             } description: {
                 Text(message)
             } actions: {
