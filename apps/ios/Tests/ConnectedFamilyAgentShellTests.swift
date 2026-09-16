@@ -30,6 +30,10 @@ struct ConnectedFamilyAgentShellTests {
         #expect(source.contains("ChatProTab("))
         #expect(source.contains("accessibilityIdentifier: \"FamilyAgent.Chats\""))
         #expect(source.contains("openSettings: nil"))
+        #expect(source.contains("familyPresentation: true"))
+        #expect(source.contains("contentBottomInset: self.isKeyboardVisible ? 0 : Self.tabBarReservedHeight"))
+        let chatViewSource = try Self.source("../shared/OpenClawKit/Sources/OpenClawChatUI/ChatView.swift")
+        #expect(chatViewSource.contains("ChatThreeDotTypingIndicatorBubble"))
         #expect(source.contains("domainSurface(tab: .feed, kind: .feedItem)"))
         #expect(source.contains("domainSurface(tab: .ideas, kind: .idea)"))
         #expect(source.contains("domainSurface(tab: .goals, kind: .goal)"))
@@ -142,7 +146,9 @@ struct ConnectedFamilyAgentShellTests {
     @Test func `family shell uses a floating liquid glass tab bar with a material fallback`() throws {
         let source = try Self.source("Sources/ConnectedFamilyAgentShell.swift")
 
-        #expect(source.contains(".safeAreaInset(edge: .bottom"))
+        #expect(source.contains(".overlay(alignment: .bottom)"))
+        #expect(source.contains("if !self.isKeyboardVisible"))
+        #expect(source.contains("UIResponder.keyboardWillShowNotification"))
         #expect(source.contains("OpenClawGlassControlGroup"))
         #expect(source.contains(".glassEffect(.regular.interactive(), in: .capsule)"))
         #expect(source.contains(".background(.ultraThinMaterial, in: Capsule())"))
