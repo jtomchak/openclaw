@@ -680,6 +680,15 @@ public struct OpenClawChatView: View {
         let isUser = msg.role.lowercased() == "user"
         let row = VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
             bubble
+            if self.showsFamilyAcknowledgement(for: msg, isUser: isUser) {
+                Text("👍")
+                    .font(.caption)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(.thinMaterial, in: Capsule())
+                    .padding(.trailing, 8)
+                    .accessibilityLabel("Agent acknowledged")
+            }
             if let outboxState = self.viewModel.outboxState(for: msg.id) {
                 ChatOutboxStatusLabel(state: outboxState)
                     .padding(.trailing, 8)
@@ -1058,6 +1067,13 @@ public struct OpenClawChatView: View {
 }
 
 extension OpenClawChatView {
+    private func showsFamilyAcknowledgement(for message: OpenClawChatMessage, isUser: Bool) -> Bool {
+        self.liveActivityPresentation == .typingIndicatorOnly &&
+            isUser &&
+            self.showsWorkingIndicator &&
+            message.id == self.viewModel.messages.last(where: { $0.role.lowercased() == "user" })?.id
+    }
+
     private func errorPresentation(
         for error: String) -> (title: String, message: String, systemImage: String, tint: Color)
     {
