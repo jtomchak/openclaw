@@ -28,7 +28,7 @@ import {
   updateFamilyAgentToolGrants,
 } from "../../state/family-agents.js";
 import { isScopedAgentInvitationPolicy } from "../agent-invitation-policy.js";
-import { persistFamilyAgentPolicy } from "./family-agent-config.js";
+import { persistFamilyAgentPolicy } from "./agents-config-mutations.js";
 import type { GatewayRequestHandlers } from "./types.js";
 import { assertValidParams } from "./validation.js";
 

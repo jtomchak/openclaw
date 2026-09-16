@@ -24,7 +24,7 @@ vi.mock("../../state/agent-invitations.js", () => ({
   regenerateAgentInvitation: mocks.regenerateAgentInvitation,
 }));
 
-vi.mock("./family-agent-config.js", () => ({
+vi.mock("./agents-config-mutations.js", () => ({
   persistFamilyAgentPolicy: mocks.persistFamilyAgentPolicy,
 }));
 

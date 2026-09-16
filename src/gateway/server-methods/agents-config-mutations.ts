@@ -1,6 +1,7 @@
 // Agent config mutation helpers wrap retrying config writes for create/update/
 // delete flows and surface typed precondition failures to gateway handlers.
 import { resolveAgentDir, resolveAgentWorkspaceDir } from "../../agents/agent-scope.js";
+import { applyFamilyAgentPolicyToConfig } from "../../agents/family-agent-policy.js";
 import {
   applyAgentConfig,
   findAgentEntryIndex,
@@ -26,6 +27,29 @@ export class AgentConfigPreconditionError extends Error {}
 /** Checks the current config snapshot for a concrete agent entry. */
 export function isConfiguredAgent(cfg: OpenClawConfig, agentId: string): boolean {
   return findAgentEntryIndex(listAgentEntries(cfg), agentId) >= 0;
+}
+
+/** Persists the family boundary through the agent-domain config mutation owner. */
+export async function persistFamilyAgentPolicy(params: {
+  agentId: string;
+  managerAgentId: string;
+  invitationRole: string;
+  toolGrants: readonly string[];
+}): Promise<OpenClawConfig> {
+  const result = await mutateConfigFileWithRetry({
+    afterWrite: { mode: "auto" },
+    mutate: (draft) => {
+      const next = applyFamilyAgentPolicyToConfig({
+        config: draft,
+        agentId: params.agentId,
+        managerAgentId: params.managerAgentId,
+        invitationRole: params.invitationRole,
+        toolGrants: params.toolGrants,
+      });
+      Object.assign(draft, next);
+    },
+  });
+  return result.nextConfig;
 }
 
 /** Updates an existing agent entry while preserving omitted fields. */
