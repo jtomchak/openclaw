@@ -1512,6 +1512,7 @@ describe("package-mac-app plist stamping", () => {
       expect(result.stdout).toBe(arch);
       const buildArgs = [
         "build",
+        "--disable-keychain",
         "--build-system",
         "swiftbuild",
         "--package-path",
@@ -2138,7 +2139,7 @@ try {
 
   it("preserves locked Swift resolution and verifies source around each native build", () => {
     const worker = readFileSync(swiftScriptPath, "utf8");
-    const build = worker.indexOf('swift build -c "$BUILD_CONFIG" --jobs');
+    const build = worker.indexOf('swift build --disable-keychain -c "$BUILD_CONFIG" --jobs');
     expect(worker).toContain('chmod 0400 "$SWIFT_PACKAGE_LOCK_BASELINE"');
     expect(worker).toContain('cmp -s "$resolved_snapshot" "$resolved_file"');
     expect(worker).toContain('cp "$resolved_snapshot" "$resolved_file"');
@@ -2306,7 +2307,7 @@ ${mounts === "failed" ? "exit 1" : mounts === "mounted" ? `printf '/dev/disk9 on
     expect(verifier).toContain('"fsck", "--full", "--strict"');
     expect(verifier).toContain('"cat-file", object_type');
     expect(readFileSync(swiftScriptPath, "utf8")).toContain(
-      'swift package --scratch-path "$build_path" edit Peekaboo --path "$PEEKABOO_SNAPSHOT_MOUNT"',
+      'swift package --disable-keychain --scratch-path "$build_path" edit Peekaboo --path "$PEEKABOO_SNAPSHOT_MOUNT"',
     );
     const mismatched = runRealCompiledPeekabooHarness("none", "e".repeat(40));
     expect(mismatched.status).toBe(1);
@@ -2332,10 +2333,20 @@ ${mounts === "failed" ? "exit 1" : mounts === "mounted" ? `printf '/dev/disk9 on
       [[ ! -e ${JSON.stringify(marker)} ]]
       mkdir -p ${JSON.stringify(path.join(buildPath, "editables", "Peekaboo"))}
       clear_peekaboo_edit ${JSON.stringify(buildPath)}
-      grep -F -- 'package --scratch-path ${buildPath} unedit --force Peekaboo' ${JSON.stringify(marker)}
+      grep -F -- 'package --disable-keychain --scratch-path ${buildPath} unedit --force Peekaboo' ${JSON.stringify(marker)}
     `);
 
     expect(result.status, result.stderr).toBe(0);
+  });
+
+  it("does not consult the macOS Keychain for public pinned Swift packages", () => {
+    const script = readFileSync(swiftScriptPath, "utf8");
+    const swiftPackageCommands = script
+      .split("\n")
+      .filter((line) => /(?:^|\s)swift (?:package|build)\b/.test(line));
+
+    expect(swiftPackageCommands.length).toBeGreaterThan(0);
+    expect(swiftPackageCommands.every((line) => line.includes("--disable-keychain"))).toBe(true);
   });
 
   // Each real Git fixture owns a separate checkout and deadline; do not aggregate

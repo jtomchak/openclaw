@@ -28,7 +28,7 @@ build_mlx_tts_helper() {
   local arch="$1"
   shift
   # Swift 6.3 needs Swift Build for Metal and --show-bin-path for its output directory.
-  swift build --build-system swiftbuild \
+  swift build --disable-keychain --build-system swiftbuild \
     --package-path "$MLX_TTS_HELPER_ROOT" \
     -c "$BUILD_CONFIG" \
     --product "$MLX_TTS_HELPER_PRODUCT" \
@@ -252,12 +252,12 @@ prepare_swift_package_root() {
 clear_peekaboo_edit() {
   local build_path="$1"
   [[ -e "$build_path/editables/Peekaboo" ]] || return 0
-  swift package --scratch-path "$build_path" unedit --force Peekaboo >/dev/null 2>&1 || true
+  swift package --disable-keychain --scratch-path "$build_path" unedit --force Peekaboo >/dev/null 2>&1 || true
 }
 
 edit_peekaboo_from_snapshot() {
   local build_path="$1"
-  swift package --scratch-path "$build_path" edit Peekaboo --path "$PEEKABOO_SNAPSHOT_MOUNT"
+  swift package --disable-keychain --scratch-path "$build_path" edit Peekaboo --path "$PEEKABOO_SNAPSHOT_MOUNT"
 }
 
 verify_snapshot_swift_lock() {
@@ -466,19 +466,19 @@ build_swift_architecture() {
   BUILD_PATH="$(build_path_for_arch "$arch")"
   clear_peekaboo_edit "$BUILD_PATH"
   echo "📦 Resolving Swift packages [$arch]"
-  run_with_locked_swift_packages swift package --scratch-path "$BUILD_PATH" resolve
+  run_with_locked_swift_packages swift package --disable-keychain --scratch-path "$BUILD_PATH" resolve
   echo "🔒 Freezing authenticated Peekaboo sources in a read-only snapshot [$arch]"
   create_verified_peekaboo_snapshot "$BUILD_PATH" "$PEEKABOO_LOCKED_SOURCE_COMMIT"
   edit_peekaboo_from_snapshot "$BUILD_PATH"
-  swift package --scratch-path "$BUILD_PATH" resolve
+  swift package --disable-keychain --scratch-path "$BUILD_PATH" resolve
   verify_snapshot_swift_lock
   patch_swiftpm_resource_lookups "$BUILD_PATH"
   echo "🔨 Building $PRODUCT ($BUILD_CONFIG) [$arch]"
   verify_snapshot_swift_lock
-  swift build -c "$BUILD_CONFIG" --jobs "$SWIFT_BUILD_JOBS" --product "$PRODUCT" --build-path "$BUILD_PATH" --arch "$arch" -Xlinker -rpath -Xlinker @executable_path/../Frameworks
+  swift build --disable-keychain -c "$BUILD_CONFIG" --jobs "$SWIFT_BUILD_JOBS" --product "$PRODUCT" --build-path "$BUILD_PATH" --arch "$arch" -Xlinker -rpath -Xlinker @executable_path/../Frameworks
   verify_snapshot_swift_lock
   echo "🔨 Building openclaw-mac ($BUILD_CONFIG) [$arch]"
-  swift build -c "$BUILD_CONFIG" --jobs "$SWIFT_BUILD_JOBS" --product openclaw-mac --build-path "$BUILD_PATH" --arch "$arch" -Xlinker -rpath -Xlinker @executable_path/../Frameworks
+  swift build --disable-keychain -c "$BUILD_CONFIG" --jobs "$SWIFT_BUILD_JOBS" --product openclaw-mac --build-path "$BUILD_PATH" --arch "$arch" -Xlinker -rpath -Xlinker @executable_path/../Frameworks
   verify_snapshot_swift_lock
   arch_peekaboo_commit="$(compiled_peekaboo_commit "$PEEKABOO_SNAPSHOT_MOUNT" "$PEEKABOO_LOCKED_SOURCE_COMMIT")"
   printf '%s\n' "$arch_peekaboo_commit" > "$SWIFT_WORK_ROOT/peekaboo-commit"
