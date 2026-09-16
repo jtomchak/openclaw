@@ -58,17 +58,23 @@ struct ChatProTab: View {
     let headerSidebarAction: OpenClawSidebarHeaderAction?
     let headerTitle: String?
     let showsAgentBadge: Bool
+    let familyPresentation: Bool
+    let contentBottomInset: CGFloat
     let openSettings: (() -> Void)?
 
     init(
         headerSidebarAction: OpenClawSidebarHeaderAction? = nil,
         headerTitle: String? = nil,
         showsAgentBadge: Bool = true,
+        familyPresentation: Bool = false,
+        contentBottomInset: CGFloat = 0,
         openSettings: (() -> Void)? = nil)
     {
         self.headerSidebarAction = headerSidebarAction
         self.headerTitle = headerTitle
         self.showsAgentBadge = showsAgentBadge
+        self.familyPresentation = familyPresentation
+        self.contentBottomInset = contentBottomInset
         self.openSettings = openSettings
     }
 
@@ -212,12 +218,14 @@ struct ChatProTab: View {
                 drawsBackground: true,
                 showsSessionSwitcher: false,
                 userAccent: self.chatUserAccent,
-                showsAssistantTrace: self.showsAssistantTrace,
+                showsAssistantTrace: self.familyPresentation ? false : self.showsAssistantTrace,
                 assistantName: self.agentDisplayName,
                 assistantAvatarText: self.agentBadge,
                 assistantAvatarTint: OpenClawBrand.accent,
                 showsAssistantAvatars: false,
                 composerChrome: .clean,
+                liveActivityPresentation: self.familyPresentation ? .typingIndicatorOnly : .detailed,
+                contentBottomInset: self.contentBottomInset,
                 isComposerEnabled: self.gatewayConnected || self.canQueueOffline,
                 isAttachmentInputEnabled: self.gatewayConnected || self.canQueueOffline,
                 messagePlaceholder: self.messagePlaceholder,

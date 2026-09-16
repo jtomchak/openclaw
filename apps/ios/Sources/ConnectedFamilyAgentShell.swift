@@ -2,6 +2,9 @@ import Foundation
 import OpenClawChatUI
 import OpenClawProtocol
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 enum ConnectedFamilyAgentTab: String, CaseIterable, Identifiable {
     case chat
@@ -122,9 +125,11 @@ struct ConnectedFamilyAgentShell: View {
     @State private var selectedRecord: FamilyRecordSelection?
     @State private var showsActionCenter = false
     @State private var showsChatSwitcher = false
+    @State private var isKeyboardVisible = false
     @State private var interactionError: String?
     @Namespace private var tabSelectionNamespace
     private let fixtureEnabled: Bool
+    private static let tabBarReservedHeight: CGFloat = 72
 
     init(arguments: [String] = ProcessInfo.processInfo.arguments) {
         _selectedTab = State(initialValue: ConnectedFamilyAgentShellFixture.initialTab(arguments: arguments))
@@ -134,8 +139,11 @@ struct ConnectedFamilyAgentShell: View {
     var body: some View {
         self.selectedContent
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                self.tabBar
+            .overlay(alignment: .bottom) {
+                if !self.isKeyboardVisible {
+                    self.tabBar
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
             .background(OpenClawProBackground())
             .accessibilityIdentifier("FamilyAgent.Shell")
@@ -144,6 +152,18 @@ struct ConnectedFamilyAgentShell: View {
                     await self.appModel.refreshFamilyDomain()
                 }
             }
+            #if canImport(UIKit)
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+                withAnimation(.easeOut(duration: 0.2)) {
+                    self.isKeyboardVisible = true
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                withAnimation(.easeOut(duration: 0.2)) {
+                    self.isKeyboardVisible = false
+                }
+            }
+            #endif
             .sheet(item: self.$selectedRecord) { selection in
                 FamilyRecordDetailSheet(
                     record: selection.record,
@@ -187,6 +207,8 @@ struct ConnectedFamilyAgentShell: View {
                         accessibilityLabel: .localized("Chats"),
                         accessibilityIdentifier: "FamilyAgent.Chats",
                         action: { self.showsChatSwitcher = true }),
+                    familyPresentation: true,
+                    contentBottomInset: self.isKeyboardVisible ? 0 : Self.tabBarReservedHeight,
                     openSettings: nil)
             }
         case .feed:

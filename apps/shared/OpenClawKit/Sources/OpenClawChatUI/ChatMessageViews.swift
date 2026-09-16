@@ -888,6 +888,35 @@ struct ChatTypingIndicatorBubble: View {
     }
 }
 
+@MainActor
+struct ChatThreeDotTypingIndicatorBubble: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let isClean: Bool
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 0.24, paused: self.reduceMotion)) { context in
+            let phase = self.reduceMotion ? 0 : Int(context.date.timeIntervalSinceReferenceDate / 0.24) % 3
+            HStack(spacing: 6) {
+                ForEach(0..<3, id: \.self) { index in
+                    Circle()
+                        .fill(.secondary)
+                        .frame(width: 7, height: 7)
+                        .scaleEffect(phase == index ? 1 : 0.78)
+                        .opacity(phase == index ? 0.9 : 0.4)
+                }
+            }
+            .padding(.vertical, self.isClean ? 9 : 11)
+            .padding(.horizontal, self.isClean ? 12 : 14)
+            .assistantBubbleContainerStyle(isClean: self.isClean, cornerRadius: 15)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .focusable(false)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("Writing"))
+    }
+}
+
 private struct ChatWorkingIndicatorContent: View {
     @State private var startedAt: Date
     let seed: String
