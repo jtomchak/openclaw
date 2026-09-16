@@ -168,7 +168,7 @@ export function resolveAssignedAgentId(
     role.agents !== "*" &&
     role.agents.length === 1 &&
     !role.scopes.includes("operator.admin")
-    ? role.agents[0]
+    ? (role.agents[0] ?? null)
     : null;
 }
 

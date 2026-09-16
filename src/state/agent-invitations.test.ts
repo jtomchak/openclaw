@@ -6,6 +6,7 @@ import {
   bindAgentInvitationDevice,
   completeAgentInvitationRevocation,
   createAgentInvitation,
+  regenerateAgentInvitation,
   reserveAgentInvitationRedemption,
   resolveActiveAgentInvitationForDevice,
 } from "./agent-invitations.js";
@@ -181,5 +182,57 @@ describe("agent invitation state", () => {
         options,
       ),
     ).toEqual({ ok: false, reason: "invalid_policy" });
+  });
+
+  it("regenerates unfinished invitations while preserving an active device binding", () => {
+    const options = stateOptions();
+    const pending = createAgentInvitation(
+      { agentId: "restricted", role: "restricted", expiresAtMs: 2_000, nowMs: 1_000 },
+      options,
+    );
+    const active = createAgentInvitation(
+      { agentId: "restricted", role: "restricted", expiresAtMs: 2_000, nowMs: 1_000 },
+      options,
+    );
+    const reserved = reserveAgentInvitationRedemption(
+      { token: active.token, enrollmentKeyThumbprint: "thumb-active", nowMs: 1_001 },
+      options,
+    );
+    if (!reserved.ok || !reserved.invitation.setupId) {
+      throw new Error("test invitation reservation failed");
+    }
+    bindAgentInvitationDevice(
+      {
+        setupId: reserved.invitation.setupId,
+        deviceId: "device-active",
+        gatewayPublicKey: "key-active",
+        nowMs: 1_002,
+      },
+      options,
+    );
+
+    const rotated = regenerateAgentInvitation(
+      { agentId: "restricted", role: "restricted", expiresAtMs: 3_000, nowMs: 1_100 },
+      options,
+    );
+
+    expect(
+      reserveAgentInvitationRedemption(
+        { token: pending.token, enrollmentKeyThumbprint: "thumb-old", nowMs: 1_101 },
+        options,
+      ),
+    ).toEqual({ ok: false, reason: "revoked" });
+    expect(
+      resolveActiveAgentInvitationForDevice(
+        { deviceId: "device-active", gatewayPublicKey: "key-active" },
+        options,
+      ),
+    ).toMatchObject({ invitationId: active.invitation.invitationId, state: "active" });
+    expect(
+      reserveAgentInvitationRedemption(
+        { token: rotated.token, enrollmentKeyThumbprint: "thumb-new", nowMs: 1_101 },
+        options,
+      ),
+    ).toMatchObject({ ok: true });
   });
 });

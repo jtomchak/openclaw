@@ -89,6 +89,7 @@ export type ResolvedAgentConfig = {
   identity?: AgentEntry["identity"];
   groupChat?: AgentEntry["groupChat"];
   subagents?: AgentEntry["subagents"];
+  family?: AgentEntry["family"];
   embeddedAgent?: AgentEntry["embeddedAgent"];
   sandbox?: AgentEntry["sandbox"];
   tools?: AgentEntry["tools"];
@@ -485,6 +486,7 @@ export function resolveAgentConfig(
     identity: entry.identity,
     groupChat: entry.groupChat,
     subagents: typeof entry.subagents === "object" && entry.subagents ? entry.subagents : undefined,
+    family: typeof entry.family === "object" && entry.family ? entry.family : undefined,
     embeddedAgent:
       typeof entry.embeddedAgent === "object" && entry.embeddedAgent
         ? entry.embeddedAgent

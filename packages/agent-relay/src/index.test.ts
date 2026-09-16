@@ -38,7 +38,7 @@ function environment(): RelayEnv {
     EDGE_TOKEN_SIGNING_KEY: base64UrlEncode(crypto.getRandomValues(new Uint8Array(32))),
     AGENT_RELAY_GUARD: guard,
     GATEWAY_WS_URL: "wss://gateway.example.invalid",
-    APPLE_APP_ID: "TEAMID.ai.openclaw.ios",
+    APPLE_APP_IDS: "TEAMID1234.ai.openclaw.ios,TEAMID1234.ai.openclaw.ios.debug",
     OPENCLAW_GATEWAY_TOKEN: "synthetic-admin-token",
     RELAY_DEVICE_IDENTITY: JSON.stringify({
       deviceId: "a".repeat(64),
@@ -65,6 +65,7 @@ function invitation(params: {
 }
 
 async function signedPost(params: {
+  audience?: string;
   body: Record<string, unknown>;
   key: Awaited<ReturnType<typeof deviceKey>>;
   path: string;
@@ -73,7 +74,7 @@ async function signedPost(params: {
   const rawBody = JSON.stringify(params.body);
   const nonce = `nonce-${crypto.randomUUID()}`;
   const canonical = await canonicalDeviceProof({
-    audience: "openclaw-agent-relay",
+    audience: params.audience ?? "openclaw-agent-relay",
     method: "POST",
     nonce,
     path: params.path,
@@ -208,8 +209,15 @@ describe("agent relay vertical slice", () => {
       env,
       { gatewayRpc: {} as AgentGatewayRpc },
     );
-    expect(await response.json()).toMatchObject({
-      applinks: { details: [{ components: [{ "/": "/agent/invite" }] }] },
+    expect(await response.json()).toEqual({
+      applinks: {
+        details: [
+          {
+            appIDs: ["TEAMID1234.ai.openclaw.ios", "TEAMID1234.ai.openclaw.ios.debug"],
+            components: [{ "/": "/agent/invite" }],
+          },
+        ],
+      },
     });
     const stripped = stripRelayHeaders(
       new Headers({
@@ -228,6 +236,57 @@ describe("agent relay vertical slice", () => {
     expect(stripped.has("X-OpenClaw-Device-Proof")).toBe(false);
     expect(stripped.get("Upgrade")).toBe("websocket");
     expect(stripped.get("Sec-WebSocket-Protocol")).toBe("openclaw");
+  });
+
+  it("bridges the installed Family app's legacy invitation wire format", async () => {
+    const nowMs = 1_800_000_000_000;
+    const key = await deviceKey();
+    const rpc: AgentGatewayRpc = {
+      async redeem(input) {
+        expect(input.token).toBe("synthetic-legacy-invitation-token");
+        return {
+          invitation: invitation({ enrollmentKeyThumbprint: key.thumbprint, state: "redeeming" }),
+          setupCode: "synthetic-setup-code",
+          setupExpiresAtMs: nowMs + 60_000,
+          setupId: "setup-1",
+        };
+      },
+      async status() {
+        return {
+          invitation: invitation({ enrollmentKeyThumbprint: key.thumbprint, state: "active" }),
+        };
+      },
+    };
+    const deviceJwk = JSON.stringify(key.jwk);
+    const redeem = await handleAgentRelayRequest(
+      await signedPost({
+        audience: "openclaw-family-relay",
+        body: {
+          inviteToken: "synthetic-legacy-invitation-token",
+          deviceJwk,
+          deviceThumbprint: key.thumbprint,
+        },
+        key,
+        path: "/v1/invites/redeem",
+        timestampMs: nowMs,
+      }),
+      environment(),
+      { gatewayRpc: rpc, nowMs: () => nowMs },
+    );
+    expect(await redeem.json()).toMatchObject({ inviteId: "invitation-1", status: "redeeming" });
+
+    const edge = await handleAgentRelayRequest(
+      await signedPost({
+        audience: "openclaw-family-relay",
+        body: { inviteId: "invitation-1", deviceJwk, deviceThumbprint: key.thumbprint },
+        key,
+        path: "/v1/edge-tokens",
+        timestampMs: nowMs,
+      }),
+      environment(),
+      { gatewayRpc: rpc, nowMs: () => nowMs },
+    );
+    expect(edge.status).toBe(200);
   });
 
   it("converts only a secure Gateway WebSocket URL into a Worker fetch URL", () => {

@@ -110,6 +110,18 @@ export const AgentEntryBaseSchema = z
       })
       .strict()
       .optional(),
+    family: z
+      .discriminatedUnion("role", [
+        z.object({ role: z.literal("manager") }).strict(),
+        z
+          .object({
+            role: z.literal("member"),
+            managerAgentId: z.string().min(1),
+            invitationRole: z.string().min(1),
+          })
+          .strict(),
+      ])
+      .optional(),
     embeddedAgent: AgentEntryEmbeddedAgentConfigSchema,
     params: z.record(z.string(), z.unknown()).optional(),
     runtime: AgentRuntimeSchema,

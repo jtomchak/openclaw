@@ -137,6 +137,14 @@ export const validateFamilyBootstrapParams = compile(S.FamilyBootstrapParamsSche
 export const validateFamilySyncParams = compile(S.FamilyListParamsSchema);
 export const validateFamilyListParams = compile(S.FamilyListParamsSchema);
 export const validateFamilyMutateParams = compile(S.FamilyMutateParamsSchema);
+export const validateFamilyAgentsAdoptParams = compile(S.FamilyAgentsAdoptParamsSchema);
+export const validateFamilyAgentsListParams = compile(S.FamilyAgentsListParamsSchema);
+export const validateFamilyAgentsUpdateGrantsParams = compile(
+  S.FamilyAgentsUpdateGrantsParamsSchema,
+);
+export const validateFamilyInvitationsRegenerateParams = compile(
+  S.FamilyInvitationsRegenerateParamsSchema,
+);
 export const validateUsersLinkEmailParams = compile(S.UsersLinkEmailParamsSchema);
 export const validateUsersLinkEmailResult = compile(S.UsersLinkEmailResultSchema);
 export const validateUsersSetDisplayNameParams = compile(S.UsersSetDisplayNameParamsSchema);

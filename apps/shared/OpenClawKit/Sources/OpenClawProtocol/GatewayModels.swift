@@ -122,6 +122,11 @@ public enum EnvironmentStatus: String, Codable, Sendable {
     case error = "error"
 }
 
+public enum FamilyAgentLifecycleState: String, Codable, Sendable {
+    case active = "active"
+    case setupRequired = "setup_required"
+}
+
 public enum FamilyMutationOperation: String, Codable, Sendable {
     case create = "create"
     case update = "update"
@@ -7750,6 +7755,152 @@ public struct ExternalPostApprovalScope: Codable, Sendable {
     }
 }
 
+public struct FamilyAgent: Codable, Sendable {
+    public let agentid: String
+    public let manageragentid: String
+    public let invitationrole: String
+    public let relayurl: String
+    public let displayname: String?
+    public let toolgrants: [String]
+    public let lifecyclestate: FamilyAgentLifecycleState
+    public let adoptedatms: Int
+    public let updatedatms: Int
+
+    public init(
+        agentid: String,
+        manageragentid: String,
+        invitationrole: String,
+        relayurl: String,
+        displayname: String? = nil,
+        toolgrants: [String],
+        lifecyclestate: FamilyAgentLifecycleState,
+        adoptedatms: Int,
+        updatedatms: Int)
+    {
+        self.agentid = agentid
+        self.manageragentid = manageragentid
+        self.invitationrole = invitationrole
+        self.relayurl = relayurl
+        self.displayname = displayname
+        self.toolgrants = toolgrants
+        self.lifecyclestate = lifecyclestate
+        self.adoptedatms = adoptedatms
+        self.updatedatms = updatedatms
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case agentid = "agentId"
+        case manageragentid = "managerAgentId"
+        case invitationrole = "invitationRole"
+        case relayurl = "relayUrl"
+        case displayname = "displayName"
+        case toolgrants = "toolGrants"
+        case lifecyclestate = "lifecycleState"
+        case adoptedatms = "adoptedAtMs"
+        case updatedatms = "updatedAtMs"
+    }
+}
+
+public struct FamilyAgentsAdoptParams: Codable, Sendable {
+    public let agentid: String
+    public let manageragentid: String
+    public let invitationrole: String
+    public let relayurl: String
+    public let displayname: String?
+    public let toolgrants: [String]?
+
+    public init(
+        agentid: String,
+        manageragentid: String,
+        invitationrole: String,
+        relayurl: String,
+        displayname: String? = nil,
+        toolgrants: [String]? = nil)
+    {
+        self.agentid = agentid
+        self.manageragentid = manageragentid
+        self.invitationrole = invitationrole
+        self.relayurl = relayurl
+        self.displayname = displayname
+        self.toolgrants = toolgrants
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case agentid = "agentId"
+        case manageragentid = "managerAgentId"
+        case invitationrole = "invitationRole"
+        case relayurl = "relayUrl"
+        case displayname = "displayName"
+        case toolgrants = "toolGrants"
+    }
+}
+
+public struct FamilyAgentsAdoptResult: Codable, Sendable {
+    public let familyagent: FamilyAgent
+    public let adopted: Bool
+
+    public init(
+        familyagent: FamilyAgent,
+        adopted: Bool)
+    {
+        self.familyagent = familyagent
+        self.adopted = adopted
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case familyagent = "familyAgent"
+        case adopted
+    }
+}
+
+public struct FamilyAgentsListParams: Codable, Sendable {}
+
+public struct FamilyAgentsListResult: Codable, Sendable {
+    public let familyagents: [FamilyAgent]
+
+    public init(
+        familyagents: [FamilyAgent])
+    {
+        self.familyagents = familyagents
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case familyagents = "familyAgents"
+    }
+}
+
+public struct FamilyAgentsUpdateGrantsParams: Codable, Sendable {
+    public let agentid: String
+    public let toolgrants: [String]
+
+    public init(
+        agentid: String,
+        toolgrants: [String])
+    {
+        self.agentid = agentid
+        self.toolgrants = toolgrants
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case agentid = "agentId"
+        case toolgrants = "toolGrants"
+    }
+}
+
+public struct FamilyAgentsUpdateGrantsResult: Codable, Sendable {
+    public let familyagent: FamilyAgent
+
+    public init(
+        familyagent: FamilyAgent)
+    {
+        self.familyagent = familyagent
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case familyagent = "familyAgent"
+    }
+}
+
 public struct FamilyBootstrapParams: Codable, Sendable {}
 
 public struct FamilyBootstrapResult: Codable, Sendable {
@@ -7775,6 +7926,42 @@ public struct FamilyBootstrapResult: Codable, Sendable {
         case cursor
         case hasmore = "hasMore"
         case capabilities
+    }
+}
+
+public struct FamilyInvitationsRegenerateParams: Codable, Sendable {
+    public let agentid: String
+    public let expiresinms: Int?
+
+    public init(
+        agentid: String,
+        expiresinms: Int? = nil)
+    {
+        self.agentid = agentid
+        self.expiresinms = expiresinms
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case agentid = "agentId"
+        case expiresinms = "expiresInMs"
+    }
+}
+
+public struct FamilyInvitationsRegenerateResult: Codable, Sendable {
+    public let invitation: AgentInvitation
+    public let inviteurl: String
+
+    public init(
+        invitation: AgentInvitation,
+        inviteurl: String)
+    {
+        self.invitation = invitation
+        self.inviteurl = inviteurl
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case invitation
+        case inviteurl = "inviteUrl"
     }
 }
 

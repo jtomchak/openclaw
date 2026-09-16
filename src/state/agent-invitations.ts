@@ -102,6 +102,57 @@ export function createAgentInvitation(
   return { invitation: toRecord(row, nowMs), token };
 }
 
+/** Rotates only unfinished enrollment attempts; active device bindings remain valid. */
+export function regenerateAgentInvitation(
+  params: {
+    agentId: string;
+    role: string;
+    displayName?: string;
+    expiresAtMs: number;
+    nowMs?: number;
+  },
+  options: OpenClawStateDatabaseOptions = {},
+): { invitation: AgentInvitationRecord; token: string } {
+  const nowMs = params.nowMs ?? Date.now();
+  const token = randomBytes(32).toString("base64url");
+  const row: AgentInvitations = {
+    invitation_id: randomUUID(),
+    token_hash: hashToken(token),
+    agent_id: params.agentId,
+    role_name: params.role,
+    display_name: params.displayName?.trim() || null,
+    state: "pending",
+    created_at_ms: nowMs,
+    expires_at_ms: params.expiresAtMs,
+    enrollment_key_thumbprint: null,
+    setup_id: null,
+    profile_id: null,
+    device_id: null,
+    gateway_public_key: null,
+    redeemed_at_ms: null,
+    revoked_at_ms: null,
+    updated_at_ms: nowMs,
+  };
+  const database = prepare(options);
+  runOpenClawStateWriteTransaction(
+    ({ db }) => {
+      const kysely = getNodeSqliteKysely<OpenClawStateKyselyDatabase>(db);
+      executeSqliteQuerySync(
+        db,
+        kysely
+          .updateTable("agent_invitations")
+          .set({ state: "revoked", revoked_at_ms: nowMs, updated_at_ms: nowMs })
+          .where("agent_id", "=", params.agentId)
+          .where("state", "in", ["pending", "redeeming"]),
+      );
+      executeSqliteQuerySync(db, kysely.insertInto("agent_invitations").values(row));
+    },
+    { ...options, database },
+    { operationLabel: "agent-invitations.regenerate" },
+  );
+  return { invitation: toRecord(row, nowMs), token };
+}
+
 export type ReserveAgentInvitationResult =
   | { ok: true; invitation: AgentInvitationRecord }
   | {

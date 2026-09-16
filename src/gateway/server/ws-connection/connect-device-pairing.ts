@@ -27,6 +27,7 @@ import {
 } from "../../../infra/device-pairing.js";
 import { roleScopesAllow } from "../../../shared/operator-scope-compat.js";
 import { isBrowserCopilotClient } from "../../../utils/message-channel.js";
+import { resolveAgentInvitationForGatewayConnect } from "../../agent-invitation-connect.js";
 import { pruneSupersededSilentPairingsAfterApproval } from "../../device-pairing-prune.js";
 import { retireDeviceTokenClients } from "../../device-token-client-lifecycle.js";
 import { normalizeNodeHostCompatibilityMetadata } from "../../node-legacy-protocol-filter.js";
@@ -116,7 +117,21 @@ export async function authorizeGatewayConnectDevice(
   };
   const roleConfiguredHumanOperator = role === "operator" && Boolean(configSnapshot.gateway?.roles);
   const sharedSecretOwner = authMethod === "token" || authMethod === "password";
-  if (roleConfiguredHumanOperator && !sharedSecretOwner && !authResult.user?.trim()) {
+  const lacksVerifiedOperatorIdentity =
+    roleConfiguredHumanOperator && !sharedSecretOwner && !authResult.user?.trim();
+  const invitationResolution =
+    lacksVerifiedOperatorIdentity && device?.id && devicePublicKey
+      ? await resolveAgentInvitationForGatewayConnect({
+          cfg: configSnapshot,
+          authMethod,
+          ...(state.bootstrapTokenCandidate
+            ? { bootstrapToken: state.bootstrapTokenCandidate }
+            : {}),
+          deviceId: device.id,
+          gatewayPublicKey: devicePublicKey,
+        })
+      : { kind: "not-invited" as const };
+  if (lacksVerifiedOperatorIdentity && invitationResolution.kind !== "allowed") {
     failPairingHandshake({
       message:
         "operator role policies require a verified user identity for this authentication method; reconnect through the trusted proxy or Tailscale, or use the shared gateway token/password",

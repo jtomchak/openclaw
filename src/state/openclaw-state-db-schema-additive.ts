@@ -114,6 +114,16 @@ export function ensureAgentInvitationsSchema(database: DatabaseSync): void {
   ); // sqlite-allow-raw -- Canonical lazy additive DDL; invitation rows use Kysely.
 }
 
+/** Lazily installs the additive family-agent provisioning journal. */
+export function ensureFamilyAgentsSchema(database: DatabaseSync): void {
+  database.exec(
+    extractSqliteTableSchema(OPENCLAW_STATE_SCHEMA_SQL, "family_agents", {
+      endMarker: "ON family_agents(manager_agent_id, adopted_at_ms);",
+      errorMessage: "OpenClaw family-agent schema marker is missing.",
+    }),
+  ); // sqlite-allow-raw -- Canonical lazy additive DDL; rows use Kysely.
+}
+
 /** Lazily installs the profile-and-agent-scoped Family domain owner. */
 export function ensureFamilyDomainSchema(database: DatabaseSync): void {
   database.exec(

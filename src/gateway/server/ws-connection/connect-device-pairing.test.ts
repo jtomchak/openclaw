@@ -30,6 +30,11 @@ import {
   CONTROL_UI_OWNER_BOOTSTRAP_OPERATOR_SCOPES,
   CONTROL_UI_OWNER_BOOTSTRAP_PROFILE,
 } from "../../../shared/device-bootstrap-profile.js";
+import {
+  bindAgentInvitationDevice,
+  createAgentInvitation,
+  reserveAgentInvitationRedemption,
+} from "../../../state/agent-invitations.js";
 import { openOpenClawStateDatabase } from "../../../state/openclaw-state-db.js";
 import {
   disconnectedUserGitHubConnection,
@@ -42,6 +47,7 @@ import {
   hasMultipleSessionSharingIdentities,
   setUserProfileRole,
 } from "../../../state/user-profiles.js";
+import { isScopedAgentInvitationPolicy } from "../../agent-invitation-policy.js";
 import {
   GatewayClient,
   type GatewayClientOptions,
@@ -615,6 +621,108 @@ describe("gateway connect pairing exemptions", () => {
         clearTimeout(pauseTimeout);
       }
       await Promise.all([client?.stopAndWait(), provisionClient?.stopAndWait()]);
+      started.ws.close();
+      await started.server.close();
+      started.envSnapshot.restore();
+    }
+  });
+
+  test("admits a device-token operator bound to an active scoped agent invitation", async () => {
+    const origin = "https://localhost";
+    const auth = { mode: "token", token: "invited-device-owner-secret" } as const;
+    const config: OpenClawConfig = {
+      agents: { list: [{ id: "main" }, { id: "invited-agent" }] },
+      gateway: {
+        auth,
+        controlUi: { allowedOrigins: [origin] },
+        roles: {
+          default: "operator",
+          definitions: {
+            operator: {
+              sessions: { others: "write" },
+              agents: "*",
+              scopes: ["operator.admin", "operator.read", "operator.write"],
+            },
+            "invited-agent-role": {
+              sessions: { others: "none" },
+              sandbox: "required",
+              agents: ["invited-agent"],
+              scopes: ["operator.read", "operator.write"],
+            },
+          },
+        },
+      },
+    };
+    testState.gatewayAuth = auth;
+    testState.gatewayControlUi = config.gateway?.controlUi;
+    await replaceConfigFile({ nextConfig: config, afterWrite: { mode: "auto" } });
+    const started = await startServerWithClient(undefined, {
+      auth,
+      controlUiEnabled: true,
+      wsHeaders: { origin },
+    });
+    const loaded = loadDeviceIdentity("roles-invited-device-token");
+    let reconnect: Awaited<ReturnType<typeof openTrackedWs>> | undefined;
+    try {
+      const provisioned = await connectReq(started.ws, {
+        token: auth.token,
+        role: "operator",
+        scopes: ["operator.read", "operator.write"],
+        client: CONTROL_UI_CLIENT,
+        deviceIdentityPath: loaded.identityPath,
+      });
+      expect(provisioned.ok).toBe(true);
+      const deviceToken = (provisioned.payload as HelloOk).auth.deviceToken;
+      expect(deviceToken).toBeTypeOf("string");
+
+      const created = createAgentInvitation({
+        agentId: "invited-agent",
+        role: "invited-agent-role",
+        expiresAtMs: Date.now() + 60_000,
+      });
+      const reserved = reserveAgentInvitationRedemption({
+        token: created.token,
+        enrollmentKeyThumbprint: "invited-device-thumbprint",
+        validatePolicy: (invitation) =>
+          isScopedAgentInvitationPolicy({ cfg: config, ...invitation }),
+      });
+      expect(reserved.ok).toBe(true);
+      if (!reserved.ok || !reserved.invitation.setupId) {
+        throw new Error("expected reserved scoped agent invitation");
+      }
+      expect(
+        bindAgentInvitationDevice({
+          setupId: reserved.invitation.setupId,
+          deviceId: loaded.identity.deviceId,
+          gatewayPublicKey: loaded.publicKey,
+        }),
+      ).toMatchObject({ state: "active" });
+
+      started.ws.close();
+      reconnect = await openTrackedWs(started.port, { origin });
+      const connected = await connectReq(reconnect, {
+        skipDefaultAuth: true,
+        deviceToken,
+        role: "operator",
+        scopes: ["operator.read", "operator.write"],
+        client: CONTROL_UI_CLIENT,
+        deviceIdentityPath: loaded.identityPath,
+        prePairDevice: false,
+      });
+      expect(connected.ok, JSON.stringify(connected)).toBe(true);
+      expect((connected.payload as HelloOk).auth.scopes).toEqual([
+        "operator.read",
+        "operator.write",
+      ]);
+      expect(await rpcReq<UsersSelfResult>(reconnect, "users.self", {})).toMatchObject({
+        ok: true,
+        payload: {
+          assignedAgentId: "invited-agent",
+          profile: { role: "invited-agent-role" },
+        },
+      });
+    } finally {
+      reconnect?.close();
       started.ws.close();
       await started.server.close();
       started.envSnapshot.restore();

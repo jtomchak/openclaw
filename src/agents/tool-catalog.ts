@@ -389,6 +389,13 @@ const CORE_TOOL_DEFINITIONS: CoreToolDefinition[] = [
     includeInOpenClawGroup: true,
   },
   {
+    id: "family_invite",
+    description: "List managed family agents and rotate one-time invitation links",
+    sectionId: "agents",
+    profiles: ["coding"],
+    includeInOpenClawGroup: true,
+  },
+  {
     id: "get_goal",
     description: "Get current thread goal",
     sectionId: "agents",

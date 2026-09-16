@@ -58,6 +58,7 @@ const CORE_GATEWAY_HANDLER_MODULES = {
   "agent-invitations": () =>
     import("./agent-invitations.js").then((module) => module.agentInvitationHandlers),
   "family-domain": () => import("./family-domain.js").then((module) => module.familyDomainHandlers),
+  "family-agents": () => import("./family-agents.js").then((module) => module.familyAgentHandlers),
   health: () => import("./health.js").then((module) => module.healthHandlers),
   logs: () => import("./logs.js").then((module) => module.logsHandlers),
   "memory-search": () => import("./memory-search.js").then((module) => module.memorySearchHandlers),

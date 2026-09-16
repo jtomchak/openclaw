@@ -610,6 +610,18 @@ export interface ExecutionOwnerLifecycleBindings {
   owner_kind: string;
 }
 
+export interface FamilyAgents {
+  adopted_at_ms: number;
+  agent_id: string;
+  display_name: string | null;
+  invitation_role: string;
+  lifecycle_state: string;
+  manager_agent_id: string;
+  relay_url: string;
+  tool_grants_json: string;
+  updated_at_ms: number;
+}
+
 export interface FamilyMutations {
   agent_id: string;
   created_at_ms: number;
@@ -1822,6 +1834,7 @@ export interface DB {
   execution_decision_facts: ExecutionDecisionFacts;
   execution_identity_contexts: ExecutionIdentityContexts;
   execution_owner_lifecycle_bindings: ExecutionOwnerLifecycleBindings;
+  family_agents: FamilyAgents;
   family_mutations: FamilyMutations;
   family_records: FamilyRecords;
   fleet_cells: FleetCells;

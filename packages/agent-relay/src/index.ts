@@ -11,6 +11,7 @@ export { AgentRelayGuard };
 
 const MAX_BODY_BYTES = 16 * 1024;
 export const AGENT_RELAY_PROOF_AUDIENCE = "openclaw-agent-relay";
+const LEGACY_FAMILY_RELAY_PROOF_AUDIENCE = "openclaw-family-relay";
 const RELAY_HEADER_NAMES = [
   "authorization",
   "cf-access-client-id",
@@ -112,16 +113,26 @@ function publicRelayOrigin(env: RelayEnv): URL {
   return url;
 }
 
-async function verifyPost(request: Request, env: RelayEnv, bytes: Uint8Array, nowMs: number) {
-  if (env.EDGE_TOKEN_AUDIENCE !== AGENT_RELAY_PROOF_AUDIENCE)
+async function verifyPost(params: {
+  audience: string;
+  bytes: Uint8Array;
+  env: RelayEnv;
+  nowMs: number;
+  request: Request;
+}) {
+  if (
+    params.audience === AGENT_RELAY_PROOF_AUDIENCE &&
+    params.env.EDGE_TOKEN_AUDIENCE !== AGENT_RELAY_PROOF_AUDIENCE
+  ) {
     throw new Error("invalid relay proof audience");
+  }
   return await verifyDeviceProof({
-    audience: AGENT_RELAY_PROOF_AUDIENCE,
-    headers: request.headers,
+    audience: params.audience,
+    headers: params.request.headers,
     method: "POST",
-    nowMs,
-    path: new URL(request.url).pathname,
-    payload: bytes,
+    nowMs: params.nowMs,
+    path: new URL(params.request.url).pathname,
+    payload: params.bytes,
   });
 }
 
@@ -130,11 +141,18 @@ async function handleRedeem(
   env: RelayEnv,
   rpc: AgentGatewayRpc,
   nowMs: number,
+  legacy = false,
 ): Promise<Response> {
   const bytes = await requestBody(request);
-  const proof = await verifyPost(request, env, bytes, nowMs);
   const body = parseObject(bytes);
-  const token = body.invitationToken;
+  const proof = await verifyPost({
+    audience: legacy ? LEGACY_FAMILY_RELAY_PROOF_AUDIENCE : AGENT_RELAY_PROOF_AUDIENCE,
+    bytes,
+    env,
+    nowMs,
+    request,
+  });
+  const token = legacy ? body.inviteToken : body.invitationToken;
   if (
     typeof token !== "string" ||
     token.length < 16 ||
@@ -160,13 +178,23 @@ async function handleRedeem(
   });
   if (result.invitation.enrollmentKeyThumbprint !== proof.enrollmentKeyThumbprint)
     return errorResponse(403);
-  return json({
-    expiresAtMs: result.setupExpiresAtMs,
-    invitationId: result.invitation.invitationId,
-    setupCode: result.setupCode,
-    setupId: result.setupId,
-    status: result.invitation.state,
-  });
+  return json(
+    legacy
+      ? {
+          expiresAtMs: result.setupExpiresAtMs,
+          inviteId: result.invitation.invitationId,
+          setupCode: result.setupCode,
+          setupId: result.setupId,
+          status: result.invitation.state,
+        }
+      : {
+          expiresAtMs: result.setupExpiresAtMs,
+          invitationId: result.invitation.invitationId,
+          setupCode: result.setupCode,
+          setupId: result.setupId,
+          status: result.invitation.state,
+        },
+  );
 }
 
 async function handleEdgeToken(
@@ -176,9 +204,16 @@ async function handleEdgeToken(
   nowMs: number,
 ): Promise<Response> {
   const bytes = await requestBody(request);
-  const proof = await verifyPost(request, env, bytes, nowMs);
   const body = parseObject(bytes);
-  const invitationId = body.invitationId;
+  const legacy = typeof body.inviteId === "string" && body.invitationId === undefined;
+  const proof = await verifyPost({
+    audience: legacy ? LEGACY_FAMILY_RELAY_PROOF_AUDIENCE : AGENT_RELAY_PROOF_AUDIENCE,
+    bytes,
+    env,
+    nowMs,
+    request,
+  });
+  const invitationId = legacy ? body.inviteId : body.invitationId;
   if (
     typeof invitationId !== "string" ||
     invitationId.length < 1 ||
@@ -204,7 +239,7 @@ async function handleEdgeToken(
   )
     return errorResponse(403);
   const edgeToken = await issueEdgeToken({
-    audience: AGENT_RELAY_PROOF_AUDIENCE,
+    audience: legacy ? LEGACY_FAMILY_RELAY_PROOF_AUDIENCE : AGENT_RELAY_PROOF_AUDIENCE,
     invitationId,
     nowMs,
     signingSecret: env.EDGE_TOKEN_SIGNING_KEY,
@@ -250,14 +285,26 @@ async function handleGateway(
   const authorization = request.headers.get("Authorization");
   if (!authorization?.startsWith("Bearer ")) return errorResponse(401);
   const edgeToken = authorization.slice("Bearer ".length);
-  const claims = await verifyEdgeToken({
-    audience: AGENT_RELAY_PROOF_AUDIENCE,
-    nowMs,
-    signingSecret: env.EDGE_TOKEN_SIGNING_KEY,
-    token: edgeToken,
-  });
+  let audience = AGENT_RELAY_PROOF_AUDIENCE;
+  let claims: Awaited<ReturnType<typeof verifyEdgeToken>>;
+  try {
+    claims = await verifyEdgeToken({
+      audience,
+      nowMs,
+      signingSecret: env.EDGE_TOKEN_SIGNING_KEY,
+      token: edgeToken,
+    });
+  } catch {
+    audience = LEGACY_FAMILY_RELAY_PROOF_AUDIENCE;
+    claims = await verifyEdgeToken({
+      audience,
+      nowMs,
+      signingSecret: env.EDGE_TOKEN_SIGNING_KEY,
+      token: edgeToken,
+    });
+  }
   const proof = await verifyDeviceProof({
-    audience: AGENT_RELAY_PROOF_AUDIENCE,
+    audience,
     headers: request.headers,
     method: "GET",
     nowMs,
@@ -288,9 +335,23 @@ async function handleGateway(
   return await fetch(upstreamRequest);
 }
 
+function appleAppIds(env: RelayEnv): string[] {
+  const appIds = env.APPLE_APP_IDS.split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (
+    appIds.length === 0 ||
+    new Set(appIds).size !== appIds.length ||
+    appIds.some((value) => !/^[A-Z0-9]{10}\.[A-Za-z0-9.-]+$/.test(value))
+  ) {
+    throw new Error("invalid Apple application identifiers");
+  }
+  return appIds;
+}
+
 function aasa(env: RelayEnv): Response {
   return json({
-    applinks: { details: [{ appIDs: [env.APPLE_APP_ID], components: [{ "/": "/agent/invite" }] }] },
+    applinks: { details: [{ appIDs: appleAppIds(env), components: [{ "/": "/agent/invite" }] }] },
   });
 }
 
@@ -331,6 +392,8 @@ export async function handleAgentRelayRequest(
     if (request.method === "GET" && url.pathname === "/agent/invite") return invitePage();
     if (request.method === "POST" && url.pathname === "/v1/invitations/redeem")
       return await handleRedeem(request, env, rpc, nowMs);
+    if (request.method === "POST" && url.pathname === "/v1/invites/redeem")
+      return await handleRedeem(request, env, rpc, nowMs, true);
     if (request.method === "POST" && url.pathname === "/v1/edge-tokens")
       return await handleEdgeToken(request, env, rpc, nowMs);
     if (request.method === "GET" && url.pathname === "/v1/gateway")

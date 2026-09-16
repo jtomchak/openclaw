@@ -2,6 +2,7 @@
 export * from "./schema/sessions-goal.js";
 export * from "./schema/human-mentions.js";
 export * from "./schema/family-domain.js";
+export * from "./schema/family-agents.js";
 export * from "./public-schema-push.js";
 export * from "./public-schema-users.js";
 export * from "./public-schema-plugins.js";

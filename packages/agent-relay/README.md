@@ -6,7 +6,8 @@ This private workspace package is a minimal Cloudflare Worker front door for tru
 
 - `GET /.well-known/apple-app-site-association` advertises `/agent/invite`.
 - `GET /agent/invite` is a generic fallback page. Put the invitation secret in the URL fragment so it is delivered to the app but not sent in the HTTP request or access logs.
-- `POST /v1/invites/redeem` accepts the iOS enrollment body and calls `agent.invitations.redeem` with the server-held Gateway credential. Its response flattens the invite record and returns the existing one-time setup-code handoff.
+- `POST /v1/invitations/redeem` accepts the current iOS enrollment body and calls `agent.invitations.redeem` with the server-held Gateway credential.
+- `POST /v1/invites/redeem` and the legacy `inviteId` edge-token body are supported only to enroll the already-distributed Family build; both are translated to the same agent-invitation Gateway API. Remove this bridge after the agent-protocol Family build is fully rolled out.
 - `POST /v1/edge-tokens` checks `agent.invitations.status` before issuing a 45-second HS256 edge token bound to the enrolling P-256 key thumbprint.
 - `GET /v1/gateway` requires a valid edge token and a fresh P-256 proof, consumes the proof nonce, rechecks invite status, strips relay credentials, and forwards the WebSocket upgrade to the configured Gateway. Subsequent frames are not inspected or rewritten. The short-lived token may authorize the app's separate node and operator sockets, but every upgrade requires a unique signed nonce.
 
@@ -29,7 +30,7 @@ For POST routes, `payload` is the exact request-body bytes. For the WebSocket ro
 
 ## Configure
 
-Replace only the documented placeholder variables in `wrangler.jsonc`. `GATEWAY_WS_URL` must be `wss://`; `RELAY_PUBLIC_URL` must be the relay's public `https://` origin. Do not put credentials in that file.
+`wrangler.jsonc` is the production relay configuration. `GATEWAY_WS_URL` must be `wss://`; `RELAY_PUBLIC_URL` must be the relay's public `https://` origin. Keep credentials out of that file.
 
 Set secrets interactively:
 
@@ -47,8 +48,8 @@ The `AgentRelayGuard` namespace uses SQLite-backed Durable Objects partitioned b
 ## Verify without deploying
 
 ```bash
-pnpm exec tsc --noEmit -p packages/family-relay/tsconfig.json
-pnpm test packages/family-relay/src
+pnpm exec tsc --noEmit -p packages/agent-relay/tsconfig.json
+pnpm test packages/agent-relay/src
 pnpm --filter @openclaw/agent-relay exec wrangler deploy --dry-run
 ```
 

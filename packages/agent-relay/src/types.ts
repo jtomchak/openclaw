@@ -14,7 +14,7 @@ export interface RelayEnv {
   EDGE_TOKEN_SIGNING_KEY: string;
   AGENT_RELAY_GUARD: DurableObjectNamespace;
   GATEWAY_WS_URL: string;
-  APPLE_APP_ID: string;
+  APPLE_APP_IDS: string;
   OPENCLAW_GATEWAY_TOKEN: string;
   RELAY_DEVICE_IDENTITY: string;
   RELAY_PUBLIC_URL: string;

@@ -663,6 +663,23 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_invitations_active_device
   ON agent_invitations(device_id)
   WHERE state = 'active' AND device_id IS NOT NULL;
 
+-- Family-agent provisioning facts. Runtime authorization remains in canonical
+-- agent config; this journal makes adoption, management, and repair durable.
+CREATE TABLE IF NOT EXISTS family_agents (
+  agent_id TEXT NOT NULL PRIMARY KEY,
+  manager_agent_id TEXT NOT NULL,
+  invitation_role TEXT NOT NULL,
+  relay_url TEXT NOT NULL,
+  display_name TEXT,
+  tool_grants_json TEXT NOT NULL,
+  lifecycle_state TEXT NOT NULL CHECK (lifecycle_state IN ('active', 'setup_required')),
+  adopted_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_family_agents_manager
+  ON family_agents(manager_agent_id, adopted_at_ms);
+
 -- Family consumption records are scoped by both the authenticated profile and
 -- its Gateway-assigned agent. Tombstones remain rows so cursor sync cannot
 -- resurrect content on an offline device.

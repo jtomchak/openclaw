@@ -1,17 +1,23 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "openclaw-agent-relay",
+  "name": "openclaw-family-relay",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-12",
   "observability": { "enabled": true },
   "vars": {
     "EDGE_TOKEN_AUDIENCE": "openclaw-agent-relay",
-    "GATEWAY_WS_URL": "wss://gateway.example.invalid",
-    "APPLE_APP_ID": "TEAMID.ai.openclaw.ios",
-    "RELAY_PUBLIC_URL": "https://relay.example.invalid",
+    "GATEWAY_WS_URL": "wss://gateway-family.jtomchak.com",
+    "APPLE_APP_IDS": "NSLC4354J7.com.jtomchak.openclaw.family,NSLC4354J7.com.jtomchak.openclaw.family.debug",
+    "RELAY_PUBLIC_URL": "https://openclaw-family-relay.gettoit.workers.dev",
   },
   "durable_objects": {
     "bindings": [{ "name": "AGENT_RELAY_GUARD", "class_name": "AgentRelayGuard" }],
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AgentRelayGuard"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["FamilyRelayGuard"] },
+    {
+      "tag": "v2",
+      "renamed_classes": [{ "from": "FamilyRelayGuard", "to": "AgentRelayGuard" }],
+    },
+  ],
 }

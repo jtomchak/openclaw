@@ -1,48 +1,45 @@
 # Trusted-person agent onboarding
 
-This document defines the first non-visual iOS foundation for inviting a trusted person to use a personal OpenClaw agent. The Swift `TrustedAgentProvisioningBlueprint` is a policy description for a later Invite UI; it does not provision anything by itself and it never contains credential material.
+This document defines the trusted-person flow for adopting an existing OpenClaw agent as a family agent and inviting a device to it. The Swift `TrustedAgentProvisioningBlueprint` remains a client-side policy description and never contains credential material. Gateway family-agent RPCs own adoption, capability grants, and invitation rotation.
 
 ## Security model
 
 The default blueprint provisions logical separation inside one trusted Gateway boundary:
 
-- one explicit user-profile owner;
-- a dedicated agent directory and workspace;
-- `tools.agentToAgent.enabled: false`;
-- `tools.sessions.visibility: "agent"`, represented in the client as same-agent visibility;
-- connector and model authorization performed by the invited person;
-- a parent-managed inference allowlist for Codex and/or Ollama Cloud routes; and
+- one explicit family manager;
+- an existing dedicated agent directory and workspace;
+- no agent-to-agent routing for family-member runs;
+- same-agent session visibility for family-member runs;
+- an explicit parent-approved tool allowlist;
+- connector and model authorization performed by the invited person; and
 - Gateway-owned credential storage and authorization flows, with no connector secret values returned to iOS.
 
-Agent directories, workspaces, auth state, and sessions provide useful separation, but a shared Gateway is not an administrator or OS security boundary. OpenClaw's default session visibility is Gateway-wide and agent-to-agent messaging is enabled unless explicitly narrowed. A person who needs strict separation must use the blueprint's dedicated-Gateway/host isolation level and be provisioned on a separate Gateway running under an appropriate OS or host boundary.
+Agent directories, workspaces, auth state, and sessions provide useful separation, but a shared Gateway is not an administrator or OS security boundary. The runtime applies session restrictions only to the family member, leaving the manager and unrelated agents unchanged. A person who needs strict OS separation must use a dedicated Gateway running under an appropriate OS or host boundary.
 
-## Proposed end-to-end flow
+## Implemented adoption and invitation flow
 
-1. The parent chooses the child, requested capabilities, and allowed Codex/Ollama Cloud inference routes. iOS creates and validates a blueprint locally.
-2. The Gateway resolves or creates the durable user profile through its existing authenticated profile flow (`users.self`; administrative discovery and profile setup use the existing `users.list`, `users.linkEmail`, `users.setDisplayName`, and, when configured, `users.setRole` methods).
-3. An administrator creates the dedicated agent with `agents.create`, supplying a unique workspace; the Gateway derives the agent directory from the new agent ID. `agents.update` can change identity, workspace, and model fields, while `agents.delete` is the compensating removal operation.
-4. A future Gateway provisioning owner applies the shared-Gateway isolation settings needed by the blueprint: same-agent session visibility and disabled agent-to-agent tools. These settings are Gateway configuration today, and `agents.update` cannot change them, so the provisioning contract must reconcile their Gateway-wide effect instead of treating them as per-invite state.
-5. The invitee connects with a verified durable profile. The client confirms the authenticated identity with `users.self` before offering personal authorization.
-6. The invitee authorizes model accounts through `users.authConnect.catalog`, `users.authConnect.start`, `users.authConnect.answer`, `users.authConnect.status`, and `users.authConnect.cancel`. Personal GitHub authorization uses `users.github.status`, `users.github.authorize.start`, `users.github.authorize.poll`, `users.github.authorize.cancel`, and `users.github.disconnect`. Arbitrary app connectors do not yet have a generic personal-authorization RPC; each connector must use an existing connector-owned flow, or remain unavailable until the Gateway exposes one.
-7. iOS receives only flow identifiers, catalog/status data, and success or failure. Credential values stay in Gateway-owned auth-profile and secret storage. The client must not call a reveal path or introduce a second credential store.
-8. The Gateway returns a final projection containing the profile ID, agent ID, effective isolation settings, and authorization statuses. iOS compares that projection with the blueprint before presenting setup as complete.
+1. An administrator calls `family.agents.adopt` for an existing configured agent, a configured manager, and a sandbox-required single-agent invitation role. Adoption preserves the agent's identity, model, workspace, agent directory, and history.
+2. The Gateway applies the per-agent sandbox and explicit tool allowlist before recording the durable family relationship. Gateway, host-control, secret-management, publication, and family-management tools are always denied to the family member.
+3. `family.agents.updateGrants` changes the approved-tool set. General capabilities such as web search, memory, automations, media, and approved plugin tools can be granted without granting Gateway administration.
+4. `family.invitations.regenerate` revokes unfinished invitations for that family agent and creates one new invitation. Existing active device bindings remain valid.
+5. The manager agent receives the model-facing `family_invite` tool. It can list only family agents it manages and regenerate an invite for one of those agents.
+6. The invitee redeems the link through the existing enrollment flow. Credentials and invitation secrets remain Gateway-side; the link places the one-time token in the URL fragment so it is not sent as an HTTP request target.
 
-## Missing atomic provisioning contract
+All direct `family.*` Gateway methods require `operator.admin`. The family-member invitation role must not include that scope. The kid app uses the existing constrained enrollment and agent surfaces; it never receives family-management RPCs or host administration privileges.
 
-The existing RPCs own some individual operations, but there is no single atomic contract that creates or resolves the profile, creates the agent paths, applies isolation policy, binds ownership, authorizes arbitrary personal connectors, and returns a reconciled result. The Invite UI must not disguise a sequence of successful partial writes as one transaction.
+Adoption records the family agent's relay URL. It must be an HTTPS origin without a path, port, credentials, query, or fragment. The Gateway validates the stored origin before revoking an unfinished invitation.
 
-A future Gateway-owned provisioning operation should accept an idempotency key plus the validated blueprint, record step state durably, and return the same operation/result for retries. It should own authorization checks, path allocation, conflict detection, and the final effective-policy projection. Adding that RPC is deliberately outside this milestone.
+## Ownership and recovery
 
-## Rollback and idempotency
+Family adoption is a durable SQLite journal keyed by agent ID. Repeating adoption under the same manager and invitation role reconciles the recorded display name, lifecycle, and tool grants. Attempting to transfer an adopted agent to another manager or role fails closed; ownership transfer needs a separate explicit contract.
 
-Until an atomic owner exists, a coordinator must persist a Gateway-side operation identity before the first write and reconcile current state before every retry. Retrying must reuse the same profile and agent identity rather than append another agent or workspace.
+Canonical runtime authorization remains in agent configuration. Adoption writes the restrictive config first, then records the family relationship. Grant updates follow the same order. A config write failure therefore cannot publish a more permissive durable family record.
 
-If a later step fails, rollback runs in reverse order and only removes resources created by that operation. `agents.delete` can compensate for a newly created agent, but an existing user profile, completed personal authorization, pre-existing config, or user-owned data must not be deleted. A failed cleanup remains a visible recoverable state with the exact unfinished step. The flow reaches complete only after a fresh read proves that the effective owner, paths, access controls, and authorization statuses match the blueprint.
+Invitation rotation is one SQLite transaction: unfinished links are revoked and the replacement is inserted together. Active device bindings are deliberately outside that rotation.
 
 ## Staged roadmap
 
-1. **Foundation (this milestone):** Codable blueprint, safe defaults, validation, tests, and this boundary document.
-2. **Gateway contract:** design and add one authoritative, idempotent provisioning operation with durable progress, reconciliation, and scoped rollback.
-3. **iOS service layer:** map the blueprint to that operation, resume interrupted work, and expose status without secret values.
-4. **Invite UI:** add the Muse-style inviter and invitee experience, capability review, strict-isolation explanation, and recoverable progress states.
-5. **Proof and hardening:** exercise interrupted/retried provisioning, ownership changes, connector cancellation, rollback failures, and dedicated-Gateway handoff through real end-to-end flows.
+1. **Implemented:** durable existing-agent adoption, explicit grants, member-only runtime isolation, invitation rotation, manager tool, public protocol models, and focused state/Gateway tests.
+2. **Parent app:** connect the Family Agents settings screen to the public RPCs and present share/copy controls without logging the invite token.
+3. **Authorization expansion:** add connector-owned personal authorization flows where no safe existing flow is available.
+4. **Proof and hardening:** exercise interrupted config writes, invite retries, ownership-transfer rejection, and dedicated-Gateway handoff through real end-to-end flows.

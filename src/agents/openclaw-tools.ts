@@ -8,7 +8,11 @@ import { getActiveSecretsRuntimeConfigSnapshot } from "../secrets/runtime-state.
 import { getActiveRuntimeWebToolsMetadataFromState } from "../secrets/runtime-web-tools-state.js";
 import { isCronRunSessionKey } from "../sessions/session-key-utils.js";
 import { resolveSkillWorkshopToolConstructionBlock } from "../skills/workshop/tool-availability.js";
-import { resolveAgentWorkspaceDir, resolveSessionAgentIds } from "./agent-scope.js";
+import {
+  resolveAgentConfig,
+  resolveAgentWorkspaceDir,
+  resolveSessionAgentIds,
+} from "./agent-scope.js";
 import { finalizeAgentToolAvailability } from "./agent-tool-availability.js";
 import { bindAssembledAgentToolActionDescriptor } from "./agent-tool-metadata.js";
 import {
@@ -16,6 +20,7 @@ import {
   isToolWrappedWithBeforeToolCallHook,
   wrapToolWithBeforeToolCallHook,
 } from "./agent-tools.before-tool-call.js";
+import { applyFamilyAgentRuntimeBoundary } from "./family-agent-policy.js";
 import { resolveOpenClawPluginToolsForOptions } from "./openclaw-plugin-tools.js";
 import { filterToolsByClientCaps } from "./openclaw-tools.client-caps.js";
 import {
@@ -50,6 +55,7 @@ import {
 import { createCronTool } from "./tools/cron-tool.js";
 import { createDashboardTool } from "./tools/dashboard-tool.js";
 import { createEmbeddedCallGateway } from "./tools/embedded-gateway-stub.js";
+import { createFamilyInviteTool } from "./tools/family-invite-tool.js";
 import { createGatewayToolCallerWrapper } from "./tools/gateway-caller-context.js";
 import { createGatewayTool } from "./tools/gateway-tool.js";
 import { createGitHubIdentityStatusTool } from "./tools/github-identity-status-tool.js";
@@ -94,7 +100,6 @@ import { resolveWorkspaceRoot } from "./workspace-dir.js";
 export { filterToolsByClientCaps } from "./openclaw-tools.client-caps.js";
 export function createOpenClawTools(options?: OpenClawToolsOptions): AnyAgentTool[] {
   const resolvedConfig = options?.config;
-  const sessionConfig = options?.sessionConfigSource === "runtime" ? undefined : resolvedConfig;
   const activeProjectKeys = options?.preparedModelRuntime?.activeProjectKeys ?? [];
   const runtimeSnapshot = getActiveSecretsRuntimeConfigSnapshot();
   const availabilityConfig = selectApplicableRuntimeConfig({
@@ -107,6 +112,16 @@ export function createOpenClawTools(options?: OpenClawToolsOptions): AnyAgentToo
     config: resolvedConfig,
     agentId: options?.requesterAgentIdOverride,
   });
+  const configuredSessionAgent = resolvedConfig
+    ? resolveAgentConfig(resolvedConfig, sessionAgentId)
+    : undefined;
+  const familySessionConfig = applyFamilyAgentRuntimeBoundary(resolvedConfig, sessionAgentId);
+  const sessionConfig =
+    configuredSessionAgent?.family?.role === "member"
+      ? familySessionConfig
+      : options?.sessionConfigSource === "runtime"
+        ? undefined
+        : resolvedConfig;
   const swarmToolGroups = createOpenClawSwarmToolGroups({
     config: resolvedConfig,
     effectiveRequesterAgentId: sessionAgentId,
@@ -298,6 +313,10 @@ export function createOpenClawTools(options?: OpenClawToolsOptions): AnyAgentToo
   });
   options?.recordToolPrepStage?.("openclaw-tools:nodes-tool");
   const embedded = isEmbeddedMode();
+  const familyInviteTool =
+    !embedded && configuredSessionAgent?.family?.role === "manager"
+      ? createFamilyInviteTool(sessionAgentId)
+      : null;
   const explicitFactoryAllowlist = mergeFactoryPolicyList(
     resolvedConfig?.tools?.allow,
     resolvedConfig?.tools?.alsoAllow,
@@ -441,6 +460,7 @@ export function createOpenClawTools(options?: OpenClawToolsOptions): AnyAgentToo
           }),
         ]),
     ...collectPresentOpenClawTools([heartbeatTool]),
+    ...collectPresentOpenClawTools([familyInviteTool]),
     createTtsTool({
       agentChannel: options?.agentChannel,
       config: resolvedConfig,
