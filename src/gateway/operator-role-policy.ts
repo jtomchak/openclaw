@@ -162,7 +162,12 @@ export function hasOperatorBoundary(client: GatewayClient | null, cfg: OpenClawC
 
 /** Only a non-admin singleton role represents an agent-bound human identity. */
 export function resolveAssignedAgentId(
-  role: GatewayOperatorRoleDefinition | undefined,
+  role:
+    | {
+        readonly agents: "*" | readonly string[];
+        readonly scopes: readonly string[];
+      }
+    | undefined,
 ): string | null {
   return role &&
     role.agents !== "*" &&
