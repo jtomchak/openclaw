@@ -1442,6 +1442,21 @@ private final class TimingOutDeviceStatusService: DeviceStatusServicing {
         #expect(appModel.pendingFamilyAgentChatPrompt == nil)
     }
 
+    @Test func `foreground revalidation keeps a verified family shell mounted`() {
+        #expect(NodeAppModel.connectedFamilyAgentStateWhileRevalidating(
+            .locked(agentID: "family"),
+            familyProductEnabled: true) == .reconnecting(agentID: "family"))
+        #expect(NodeAppModel.connectedFamilyAgentStateWhileRevalidating(
+            .reconnecting(agentID: "family"),
+            familyProductEnabled: true) == .reconnecting(agentID: "family"))
+        #expect(NodeAppModel.connectedFamilyAgentStateWhileRevalidating(
+            .blocked,
+            familyProductEnabled: true) == .verifying)
+        #expect(NodeAppModel.connectedFamilyAgentStateWhileRevalidating(
+            .locked(agentID: "family"),
+            familyProductEnabled: false) == .verifying)
+    }
+
     @Test @MainActor func `unverified family access never admits a chat prompt`() {
         let appModel = NodeAppModel()
 

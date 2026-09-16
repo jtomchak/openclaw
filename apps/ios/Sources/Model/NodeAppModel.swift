@@ -1767,6 +1767,19 @@ final class NodeAppModel {
         return .locked(agentID: match.id)
     }
 
+    nonisolated static func connectedFamilyAgentStateWhileRevalidating(
+        _ currentState: ConnectedFamilyAgentState,
+        familyProductEnabled: Bool = FamilyProductBuildConfig.isEnabled) -> ConnectedFamilyAgentState
+    {
+        guard familyProductEnabled else { return .verifying }
+        switch currentState {
+        case let .locked(agentID), let .reconnecting(agentID):
+            return .reconnecting(agentID: agentID)
+        case .disconnected, .verifying, .unrestricted, .blocked:
+            return .verifying
+        }
+    }
+
     func applyConnectedFamilyAgentState(_ state: ConnectedFamilyAgentState) {
         self.connectedFamilyAgentState = state
         if FamilyProductBuildConfig.isEnabled,
@@ -1834,12 +1847,8 @@ final class NodeAppModel {
         guard let sourceGatewayID = self.chatTranscriptCacheGatewayID,
               shouldApply()
         else { return }
-        if case .reconnecting = self.connectedFamilyAgentState {
-            // Preserve the consumption-only shell while the authoritative
-            // assignment is being revalidated on the replacement route.
-        } else {
-            self.applyConnectedFamilyAgentState(.verifying)
-        }
+        self.applyConnectedFamilyAgentState(Self.connectedFamilyAgentStateWhileRevalidating(
+            self.connectedFamilyAgentState))
         do {
             guard let sourceStore = self.makeChatOfflineStore(),
                   GatewayStableIdentifier.matches(sourceStore.gatewayID, sourceGatewayID),
