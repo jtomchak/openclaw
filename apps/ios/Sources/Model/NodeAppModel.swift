@@ -61,26 +61,29 @@ final class NodeAppModel {
 
     enum ConnectedFamilyAgentState: Equatable {
         case disconnected
+        case reconnecting(agentID: String)
         case verifying
         case unrestricted
         case locked(agentID: String)
         case blocked
 
         var lockedAgentID: String? {
-            guard case let .locked(agentID) = self else { return nil }
-            return agentID
+            switch self {
+            case let .reconnecting(agentID), let .locked(agentID): agentID
+            case .disconnected, .verifying, .unrestricted, .blocked: nil
+            }
         }
 
         var requiresRestrictedShell: Bool {
             switch self {
-            case .verifying, .locked, .blocked: true
+            case .reconnecting, .verifying, .locked, .blocked: true
             case .disconnected, .unrestricted: false
             }
         }
 
         var admitsAgentRouting: Bool {
             switch self {
-            case .verifying, .blocked: false
+            case .reconnecting, .verifying, .blocked: false
             case .disconnected, .unrestricted, .locked: true
             }
         }
@@ -415,7 +418,8 @@ final class NodeAppModel {
     }
 
     var isConnectedFamilyAgentLocked: Bool {
-        self.lockedFamilyAgentID != nil
+        if case .locked = self.connectedFamilyAgentState { return true }
+        return false
     }
 
     private(set) var isDesktopObserveAvailable: Bool = false
@@ -1765,6 +1769,18 @@ final class NodeAppModel {
 
     func applyConnectedFamilyAgentState(_ state: ConnectedFamilyAgentState) {
         self.connectedFamilyAgentState = state
+        if FamilyProductBuildConfig.isEnabled,
+           let stableID = GatewayStableIdentifier.exact(self.connectedGatewayID)
+        {
+            switch state {
+            case let .locked(agentID):
+                Self.saveLastVerifiedFamilyAgentID(agentID, stableID: stableID)
+            case .blocked, .unrestricted:
+                Self.saveLastVerifiedFamilyAgentID(nil, stableID: stableID)
+            case .disconnected, .reconnecting, .verifying:
+                break
+            }
+        }
         guard case .locked = state else {
             self.pendingFamilyAgentChatPrompt = nil
             if state == .blocked {
@@ -1784,6 +1800,26 @@ final class NodeAppModel {
         self.synchronizeTalkSessionKey()
     }
 
+    private nonisolated static let lastVerifiedFamilyAgentIDsKey = "family.lastVerifiedAgentIDs"
+
+    private nonisolated static func lastVerifiedFamilyAgentID(stableID: String) -> String? {
+        let values = UserDefaults.standard.dictionary(forKey: self.lastVerifiedFamilyAgentIDsKey) as? [String: String]
+        let value = values?[stableID]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value?.isEmpty == false ? value : nil
+    }
+
+    private nonisolated static func saveLastVerifiedFamilyAgentID(_ agentID: String?, stableID: String) {
+        var values = UserDefaults.standard
+            .dictionary(forKey: self.lastVerifiedFamilyAgentIDsKey) as? [String: String] ?? [:]
+        let normalized = agentID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if normalized.isEmpty {
+            values.removeValue(forKey: stableID)
+        } else {
+            values[stableID] = normalized
+        }
+        UserDefaults.standard.set(values, forKey: self.lastVerifiedFamilyAgentIDsKey)
+    }
+
     private func blockConnectedFamilyAgentAccessIfCurrent(
         sourceGatewayID: String,
         shouldApply: () -> Bool)
@@ -1798,7 +1834,12 @@ final class NodeAppModel {
         guard let sourceGatewayID = self.chatTranscriptCacheGatewayID,
               shouldApply()
         else { return }
-        self.applyConnectedFamilyAgentState(.verifying)
+        if case .reconnecting = self.connectedFamilyAgentState {
+            // Preserve the consumption-only shell while the authoritative
+            // assignment is being revalidated on the replacement route.
+        } else {
+            self.applyConnectedFamilyAgentState(.verifying)
+        }
         do {
             guard let sourceStore = self.makeChatOfflineStore(),
                   GatewayStableIdentifier.matches(sourceStore.gatewayID, sourceGatewayID),
@@ -4120,6 +4161,11 @@ extension NodeAppModel {
         preservingGatewayProblem: Bool = false,
         preservingFocusedChatSession: Bool = false)
     {
+        let reconnectingFamilyAgentID: String? = if FamilyProductBuildConfig.isEnabled, preservingFocusedChatSession {
+            self.lockedFamilyAgentID ?? Self.lastVerifiedFamilyAgentID(stableID: stableID)
+        } else {
+            nil
+        }
         self.invalidateNodePushToTalkRoute()
         self.operatorTalkConnectionGeneration &+= 1
         self.operatorTalkHydrationGeneration = nil
@@ -4156,7 +4202,9 @@ extension NodeAppModel {
         self.gatewayAccentColorHex = nil
         self.gatewayDefaultAgentId = nil
         self.gatewayAgents = []
-        self.connectedFamilyAgentState = .disconnected
+        self.connectedFamilyAgentState = reconnectingFamilyAgentID.map {
+            .reconnecting(agentID: $0)
+        } ?? .disconnected
         self.pendingFamilyAgentChatPrompt = nil
         self.selectedAgentId = GatewaySettingsStore.loadGatewaySelectedAgentId(stableID: stableID)
         // Session keys are gateway-owned: transport reconnects keep the active chat,
@@ -5426,9 +5474,22 @@ extension NodeAppModel {
         self.operatorConnected = connected
         if !connected {
             self.isDesktopObserveAvailable = false
-            self.applyConnectedFamilyAgentState(.disconnected)
+            if FamilyProductBuildConfig.isEnabled,
+               self.gatewayAutoReconnectEnabled,
+               let stableID = GatewayStableIdentifier.exact(self.connectedGatewayID),
+               let agentID = self.lockedFamilyAgentID ?? Self.lastVerifiedFamilyAgentID(stableID: stableID)
+            {
+                self.applyConnectedFamilyAgentState(.reconnecting(agentID: agentID))
+            } else {
+                self.applyConnectedFamilyAgentState(.disconnected)
+            }
         } else if changed, !self.isLocalGatewayFixtureEnabled {
-            self.applyConnectedFamilyAgentState(.verifying)
+            if case .reconnecting = self.connectedFamilyAgentState {
+                // Keep the previously verified Family shell mounted until the
+                // fresh assignment check resolves or fails closed.
+            } else {
+                self.applyConnectedFamilyAgentState(.verifying)
+            }
         }
         self.operatorStatusText = connected ? "Connected" : "Offline"
         self.refreshOperatorAdminScopeFromStore()

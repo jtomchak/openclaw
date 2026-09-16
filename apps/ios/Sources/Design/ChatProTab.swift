@@ -168,7 +168,7 @@ struct ChatProTab: View {
                         self.headerGatewayStatus
                     }
                 }
-                if !self.appModel.isConnectedFamilyAgentLocked {
+                if !self.familyPresentation, !self.appModel.isConnectedFamilyAgentLocked {
                     if #available(iOS 26.0, *) {
                         ToolbarItem(placement: .topBarTrailing) {
                             self.chatActionsMenu
@@ -226,8 +226,8 @@ struct ChatProTab: View {
                 composerChrome: .clean,
                 liveActivityPresentation: self.familyPresentation ? .typingIndicatorOnly : .detailed,
                 contentBottomInset: self.contentBottomInset,
-                isComposerEnabled: self.gatewayConnected || self.canQueueOffline,
-                isAttachmentInputEnabled: self.gatewayConnected || self.canQueueOffline,
+                isComposerEnabled: self.gatewayConnected || (!self.familyPresentation && self.canQueueOffline),
+                isAttachmentInputEnabled: self.gatewayConnected || (!self.familyPresentation && self.canQueueOffline),
                 messagePlaceholder: self.messagePlaceholder,
                 emptyAssistantIntro: String(localized: "What would you like to work on?"),
                 emptyAssistantPrompts: Self.emptyAssistantPrompts,

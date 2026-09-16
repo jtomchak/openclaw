@@ -237,6 +237,7 @@ public enum OpenClawChatGatewayRequests {
         spawnedBy: String? = nil,
         offset: Int? = nil,
         configuredAgentsOnly: Bool? = nil,
+        includeDerivedTitles: Bool? = nil,
         timeoutMs: Double = 15000) -> OpenClawChatGatewayRequest
     {
         var params: [String: AnyCodable] = [
@@ -260,6 +261,9 @@ public enum OpenClawChatGatewayRequests {
         }
         if let configuredAgentsOnly {
             params["configuredAgentsOnly"] = AnyCodable(configuredAgentsOnly)
+        }
+        if let includeDerivedTitles {
+            params["includeDerivedTitles"] = AnyCodable(includeDerivedTitles)
         }
         let normalizedSearch = self.normalized(search)
         if let normalizedSearch {

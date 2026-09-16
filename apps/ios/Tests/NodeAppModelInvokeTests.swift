@@ -1429,6 +1429,19 @@ private final class TimingOutDeviceStatusService: DeviceStatusServicing {
         #expect(appModel.chatDeliveryAgentId == "family")
     }
 
+    @Test @MainActor func `reconnecting family assignment preserves presentation but not send authority`() {
+        let appModel = NodeAppModel()
+        appModel.applyConnectedFamilyAgentState(.reconnecting(agentID: "family"))
+
+        #expect(appModel.lockedFamilyAgentID == "family")
+        #expect(!appModel.isConnectedFamilyAgentLocked)
+        #expect(appModel.chatSessionKey == "agent:family:main")
+        #expect(appModel.chatDeliveryAgentId == nil)
+
+        appModel.requestFamilyAgentChat(prompt: "Do not queue before revalidation")
+        #expect(appModel.pendingFamilyAgentChatPrompt == nil)
+    }
+
     @Test @MainActor func `unverified family access never admits a chat prompt`() {
         let appModel = NodeAppModel()
 
