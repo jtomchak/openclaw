@@ -141,6 +141,35 @@ OPENCLAW_UPDATE_RESTART_CMD='' scripts/update-gateway.sh
 For a plain single-user source install, prefer `openclaw update --channel dev`
 instead — it manages the checkout, build, and gateway restart for you.
 
+### Local macOS build-and-restart releases
+
+For repeated local source builds, use the release-slot workflow instead of
+letting a running LaunchAgent import from a mutable checkout `dist` tree:
+
+```bash
+scripts/build-and-restart-mac-gateway.sh
+```
+
+The script snapshots the current tracked working tree without changing the real
+Git index, builds it in an immutable linked worktree while the existing Gateway
+continues serving, validates the configuration, and only then installs the
+candidate through a stable service wrapper. It requires untracked files to be
+added or ignored first so a new source file cannot be omitted from the snapshot.
+
+Activation switches one `current` symlink and reinstalls the managed LaunchAgent.
+The candidate must own the configured port and return a clean `/readyz` response.
+If install, startup, service-command verification, or readiness fails, the script
+points `current` back to the prior runtime, reinstalls that service, and verifies
+its readiness. Both successful and failed release worktrees remain under
+`~/.openclaw/runtime-builds/releases` for explicit rollback or diagnosis; remove
+old ones with `git worktree remove <path>` only after they are no longer current
+or needed for recovery.
+
+This is a code-artifact rollback, not a database downgrade. A candidate that
+performs incompatible state or configuration migrations can make the older
+runtime unsafe to start. Use the normal `openclaw update` flow plus a verified
+state backup for releases that change persistent schemas.
+
 ## Alternative: re-run the installer
 
 ```bash

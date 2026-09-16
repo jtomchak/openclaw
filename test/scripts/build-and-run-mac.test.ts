@@ -259,6 +259,7 @@ const nativeScripts = [
   "scripts/e2e/parallels-npm-update-smoke.sh",
   "scripts/apple-release-source-check.sh",
   "scripts/build-and-run-mac.sh",
+  "scripts/build-and-restart-mac-gateway.sh",
   "scripts/check-swift-tools.sh",
   "scripts/codesign-mac-app.sh",
   "scripts/create-dmg.sh",
