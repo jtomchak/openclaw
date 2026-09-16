@@ -30,6 +30,12 @@ struct ConnectedFamilyAgentShellTests {
         #expect(source.contains("ChatProTab("))
         #expect(source.contains("accessibilityIdentifier: \"FamilyAgent.Chats\""))
         #expect(source.contains("openSettings: nil"))
+        #expect(source.contains("familyPresentation: true"))
+        #expect(source.contains("contentBottomInset: self.isKeyboardVisible ? 0 : Self.tabBarReservedHeight"))
+        let chatViewSource = try Self.source("../shared/OpenClawKit/Sources/OpenClawChatUI/ChatView.swift")
+        #expect(chatViewSource.contains("ChatThreeDotTypingIndicatorBubble"))
+        #expect(source.contains("FamilyReconnectIndicator"))
+        #expect(source.contains("accessibilityLabel(\"Reconnecting\")"))
         #expect(source.contains("domainSurface(tab: .feed, kind: .feedItem)"))
         #expect(source.contains("domainSurface(tab: .ideas, kind: .idea)"))
         #expect(source.contains("domainSurface(tab: .goals, kind: .goal)"))
@@ -63,7 +69,9 @@ struct ConnectedFamilyAgentShellTests {
         #expect(shellSource.contains("Confirm complete"))
         #expect(shellSource.contains("Delete from Library"))
         #expect(shellSource.contains("FamilyActionCenterSheet"))
-        #expect(shellSource.contains("loadChatSessionRoster(limit: 200)"))
+        #expect(shellSource.contains("includeDerivedTitles: true"))
+        #expect(shellSource.contains("New side chat"))
+        #expect(!shellSource.contains("TextField(\"Topic\""))
         #expect(!shellSource.contains("selectedAgentId ="))
     }
 
@@ -74,6 +82,7 @@ struct ConnectedFamilyAgentShellTests {
             from: "private var familyProductContent",
             to: "private var openClawProductContent")
 
+        #expect(familyRoot.contains("case .locked, .reconnecting"))
         #expect(familyRoot.contains("ConnectedFamilyAgentShell()"))
         #expect(familyRoot.contains("FamilyProductWelcomeView(connectionError:"))
         #expect(familyRoot.contains("ConnectedFamilyAgentAccessGate"))
@@ -142,7 +151,9 @@ struct ConnectedFamilyAgentShellTests {
     @Test func `family shell uses a floating liquid glass tab bar with a material fallback`() throws {
         let source = try Self.source("Sources/ConnectedFamilyAgentShell.swift")
 
-        #expect(source.contains(".safeAreaInset(edge: .bottom"))
+        #expect(source.contains(".overlay(alignment: .bottom)"))
+        #expect(source.contains("if !self.isKeyboardVisible"))
+        #expect(source.contains("UIResponder.keyboardWillShowNotification"))
         #expect(source.contains("OpenClawGlassControlGroup"))
         #expect(source.contains(".glassEffect(.regular.interactive(), in: .capsule)"))
         #expect(source.contains(".background(.ultraThinMaterial, in: Capsule())"))
@@ -160,9 +171,9 @@ struct ConnectedFamilyAgentShellTests {
             from: "private var rootContent",
             to: "private var uiTestReadinessMarker")
 
-        #expect(rootContent.contains("case .locked:"))
+        #expect(rootContent.contains("case .locked, .reconnecting:"))
         #expect(rootContent.contains("ConnectedFamilyAgentShell()"))
-        #expect(rootContent.contains("case .verifying, .blocked:"))
+        #expect(rootContent.contains("case .verifying, .blocked, .unrestricted:"))
         #expect(rootContent.contains("ConnectedFamilyAgentAccessGate"))
         #expect(rootContent.contains("case .disconnected, .unrestricted:"))
         #expect(rootContent.contains("self.sidebarSplitContent"))

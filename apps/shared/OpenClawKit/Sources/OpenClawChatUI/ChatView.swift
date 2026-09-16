@@ -104,6 +104,11 @@ public struct OpenClawChatDisplayOptions: OptionSet, Sendable {
 
 @MainActor
 public struct OpenClawChatView: View {
+    public enum LiveActivityPresentation: Equatable {
+        case detailed
+        case typingIndicatorOnly
+    }
+
     public enum Style {
         case standard
         case onboarding
@@ -162,6 +167,8 @@ public struct OpenClawChatView: View {
     private let assistantAvatarTint: Color?
     private let showsAssistantAvatars: Bool
     private let composerChrome: ComposerChrome
+    private let liveActivityPresentation: LiveActivityPresentation
+    private let contentBottomInset: CGFloat
     private let isComposerEnabled: Bool
     private let isAttachmentInputEnabled: Bool
     private let messagePlaceholder: String?
@@ -226,6 +233,8 @@ public struct OpenClawChatView: View {
         assistantAvatarTint: Color? = nil,
         showsAssistantAvatars: Bool = true,
         composerChrome: ComposerChrome = .full,
+        liveActivityPresentation: LiveActivityPresentation = .detailed,
+        contentBottomInset: CGFloat = 0,
         isComposerEnabled: Bool = true,
         isAttachmentInputEnabled: Bool? = nil,
         messagePlaceholder: String? = nil,
@@ -249,6 +258,8 @@ public struct OpenClawChatView: View {
         self.assistantAvatarTint = assistantAvatarTint
         self.showsAssistantAvatars = showsAssistantAvatars
         self.composerChrome = composerChrome
+        self.liveActivityPresentation = liveActivityPresentation
+        self.contentBottomInset = contentBottomInset
         self.isComposerEnabled = isComposerEnabled
         self.isAttachmentInputEnabled = isAttachmentInputEnabled ?? isComposerEnabled
         self.messagePlaceholder = messagePlaceholder
@@ -303,15 +314,17 @@ public struct OpenClawChatView: View {
                     if wasPresented, !isPresented { self.composerFocusRequest += 1 }
                 }
                 .padding(.horizontal, Layout.outerPaddingHorizontal)
-            self.progressCard
-                .frame(maxWidth: self.readingColumnWidth)
-                .padding(.horizontal, Layout.composerPaddingHorizontal)
-            self.turnRecapRow
-                .frame(maxWidth: self.readingColumnWidth)
-            self.swarmProgress
-                .frame(maxWidth: self.readingColumnWidth)
-                .padding(.horizontal, Layout.swarmPaddingHorizontal)
-                .padding(.vertical, Layout.swarmPaddingVertical)
+            if self.liveActivityPresentation == .detailed {
+                self.progressCard
+                    .frame(maxWidth: self.readingColumnWidth)
+                    .padding(.horizontal, Layout.composerPaddingHorizontal)
+                self.turnRecapRow
+                    .frame(maxWidth: self.readingColumnWidth)
+                self.swarmProgress
+                    .frame(maxWidth: self.readingColumnWidth)
+                    .padding(.horizontal, Layout.swarmPaddingHorizontal)
+                    .padding(.vertical, Layout.swarmPaddingVertical)
+            }
             self.composer
                 .frame(maxWidth: self.readingColumnWidth)
                 .padding(.horizontal, self.isDesktopLayout ? 16 : Layout.composerPaddingHorizontal)
@@ -324,18 +337,20 @@ public struct OpenClawChatView: View {
         VStack(spacing: 0) {
             self.messageList
                 .padding(.horizontal, Layout.outerPaddingHorizontal)
-            self.progressCard
-                .padding(.horizontal, Layout.composerPaddingHorizontal)
-                .padding(.top, Layout.stackSpacing)
-            self.turnRecapRow
-            self.swarmProgress
-                .padding(.horizontal, Layout.swarmPaddingHorizontal)
-                .padding(.vertical, Layout.swarmPaddingVertical)
-                .padding(.top, Layout.stackSpacing)
+            if self.liveActivityPresentation == .detailed {
+                self.progressCard
+                    .padding(.horizontal, Layout.composerPaddingHorizontal)
+                    .padding(.top, Layout.stackSpacing)
+                self.turnRecapRow
+                self.swarmProgress
+                    .padding(.horizontal, Layout.swarmPaddingHorizontal)
+                    .padding(.vertical, Layout.swarmPaddingVertical)
+                    .padding(.top, Layout.stackSpacing)
+            }
             self.composer
                 .padding(.horizontal, Layout.composerPaddingHorizontal)
                 .padding(.top, Layout.stackSpacing)
-                .padding(.bottom, Layout.outerPaddingVertical)
+                .padding(.bottom, Layout.outerPaddingVertical + self.contentBottomInset)
         }
         .padding(.top, Layout.outerPaddingVertical)
         .frame(maxWidth: .infinity)
@@ -568,32 +583,45 @@ public struct OpenClawChatView: View {
         OpenClawQuestionCards(viewModel: self.viewModel)
 
         if self.showsWorkingIndicator {
-            ChatTypingIndicatorBubble(
-                style: self.style,
-                assistantName: self.assistantName,
-                assistantAvatarText: self.assistantAvatarText,
-                assistantAvatarTint: self.assistantAvatarTint,
-                showsAssistantAvatar: self.showsAssistantAvatars,
-                isClean: self.composerChrome == .clean,
-                runIdentity: self.viewModel.workingIndicatorIdentity,
-                outputTokens: self.viewModel.liveRunOutputTokens)
-                .equatable()
+            if self.liveActivityPresentation == .typingIndicatorOnly {
+                ChatThreeDotTypingIndicatorBubble(isClean: self.composerChrome == .clean)
+            } else {
+                ChatTypingIndicatorBubble(
+                    style: self.style,
+                    assistantName: self.assistantName,
+                    assistantAvatarText: self.assistantAvatarText,
+                    assistantAvatarTint: self.assistantAvatarTint,
+                    showsAssistantAvatar: self.showsAssistantAvatars,
+                    isClean: self.composerChrome == .clean,
+                    runIdentity: self.viewModel.workingIndicatorIdentity,
+                    outputTokens: self.viewModel.liveRunOutputTokens)
+                    .equatable()
+            }
         }
 
-        if self.displayOptions.contains(.toolActivity), !self.viewModel.subagentActivities.isEmpty {
+        if self.liveActivityPresentation == .detailed,
+           self.displayOptions.contains(.toolActivity),
+           !self.viewModel.subagentActivities.isEmpty
+        {
             ChatSubagentActivityList(
                 activities: self.viewModel.subagentActivities,
                 hiddenWorkingCount: self.viewModel.hiddenWorkingSubagentCount)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
 
-        if self.displayOptions.contains(.toolActivity), !self.viewModel.pendingToolCalls.isEmpty {
+        if self.liveActivityPresentation == .detailed,
+           self.displayOptions.contains(.toolActivity),
+           !self.viewModel.pendingToolCalls.isEmpty
+        {
             ChatPendingToolsBubble(toolCalls: self.viewModel.pendingToolCalls)
                 .equatable()
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
 
-        if let text = viewModel.streamingAssistantText, self.hasVisibleStreamingAssistantText {
+        if self.liveActivityPresentation == .detailed,
+           let text = viewModel.streamingAssistantText,
+           self.hasVisibleStreamingAssistantText
+        {
             ChatStreamingAssistantBubble(
                 text: text,
                 markdownVariant: self.markdownVariant,
@@ -652,6 +680,15 @@ public struct OpenClawChatView: View {
         let isUser = msg.role.lowercased() == "user"
         let row = VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
             bubble
+            if self.showsFamilyAcknowledgement(for: msg, isUser: isUser) {
+                Text("👍")
+                    .font(.caption)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(.thinMaterial, in: Capsule())
+                    .padding(.trailing, 8)
+                    .accessibilityLabel("Agent acknowledged")
+            }
             if let outboxState = self.viewModel.outboxState(for: msg.id) {
                 ChatOutboxStatusLabel(state: outboxState)
                     .padding(.trailing, 8)
@@ -920,7 +957,10 @@ public struct OpenClawChatView: View {
     }
 
     private var showsWorkingIndicator: Bool {
-        self.viewModel.hasBlockingRunActivity &&
+        if self.liveActivityPresentation == .typingIndicatorOnly {
+            return self.viewModel.hasBlockingRunActivity
+        }
+        return self.viewModel.hasBlockingRunActivity &&
             (!self.hasVisibleStreamingAssistantText || self.viewModel.liveUsageRunID != nil)
     }
 
@@ -944,7 +984,10 @@ public struct OpenClawChatView: View {
     }
 
     private var hasVisibleTransientContent: Bool {
-        self.viewModel.hasBlockingRunActivity ||
+        if self.liveActivityPresentation == .typingIndicatorOnly {
+            return self.viewModel.hasBlockingRunActivity || !self.viewModel.visibleQuestionCards.isEmpty
+        }
+        return self.viewModel.hasBlockingRunActivity ||
             (self.displayOptions.contains(.toolActivity) && !self.viewModel.subagentActivities.isEmpty) ||
             (self.displayOptions.contains(.toolActivity) && !self.viewModel.pendingToolCalls.isEmpty) ||
             self.hasVisibleStreamingAssistantText ||
@@ -1024,6 +1067,13 @@ public struct OpenClawChatView: View {
 }
 
 extension OpenClawChatView {
+    private func showsFamilyAcknowledgement(for message: OpenClawChatMessage, isUser: Bool) -> Bool {
+        self.liveActivityPresentation == .typingIndicatorOnly &&
+            isUser &&
+            self.showsWorkingIndicator &&
+            message.id == self.viewModel.messages.last(where: { $0.role.lowercased() == "user" })?.id
+    }
+
     private func errorPresentation(
         for error: String) -> (title: String, message: String, systemImage: String, tint: Color)
     {

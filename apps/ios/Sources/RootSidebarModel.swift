@@ -92,6 +92,7 @@ extension NodeAppModel {
     func loadChatSessionRoster(
         limit: Int,
         archived: Bool = false,
+        includeDerivedTitles: Bool = false,
         allowCachedFallback: Bool = true) async throws -> ChatSessionRosterSnapshot
     {
         let sourceGatewayID = self.chatTranscriptCacheGatewayID
@@ -128,7 +129,8 @@ extension NodeAppModel {
                         search: nil,
                         archived: archived,
                         agentID: sourceAgentID,
-                        offset: offset)
+                        offset: offset,
+                        includeDerivedTitles: includeDerivedTitles)
                     let data = try await self.operatorSession.request(request, ifCurrentRoute: route)
                     return try JSONDecoder().decode(OpenClawChatSessionsListResponse.self, from: data)
                 }
