@@ -3,7 +3,6 @@ import type { OpenClawConfig } from "../config/types.openclaw.js";
 import {
   applyFamilyAgentPolicyToConfig,
   applyFamilyAgentRuntimeBoundary,
-  FAMILY_AGENT_HARD_DENY_TOOLS,
   listDefaultFamilyAgentToolGrants,
 } from "./family-agent-policy.js";
 
@@ -48,7 +47,24 @@ describe("family agent policy", () => {
       },
       tools: { allow: ["exec", "video_generate", "web_search"], elevated: { enabled: false } },
     });
-    expect(member?.tools?.deny).toEqual(expect.arrayContaining([...FAMILY_AGENT_HARD_DENY_TOOLS]));
+    expect(member?.tools?.deny).toEqual(
+      expect.arrayContaining([
+        "gateway",
+        "plugins",
+        "nodes",
+        "computer",
+        "mobile_ui",
+        "openclaw",
+        "terminal",
+        "portal",
+        "screen",
+        "secrets",
+        "github_identity_status",
+        "github_publish",
+        "agents_list",
+        "family_invite",
+      ]),
+    );
     expect(next.agents?.entries?.walter).toMatchObject({
       family: { role: "manager" },
       tools: { allow: ["family_invite", "web_search"] },

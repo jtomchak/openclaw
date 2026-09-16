@@ -2,7 +2,7 @@ import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { normalizeAgentId } from "../routing/session-key.js";
 import { listCoreToolSections } from "./tool-catalog.js";
 
-export const FAMILY_AGENT_HARD_DENY_TOOLS = [
+const FAMILY_AGENT_HARD_DENY_TOOLS = [
   "gateway",
   "plugins",
   "nodes",

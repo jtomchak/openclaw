@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import { useAutoCleanupTempDirTracker } from "../../test/helpers/temp-dir.js";
 import {
   FamilyDomainConflictError,
-  decodeFamilyCursor,
   listFamilyRecords,
   mutateFamilyRecord,
 } from "./family-domain.js";
@@ -93,7 +92,9 @@ describe("Family domain state", () => {
       1_000,
     );
     const initial = listFamilyRecords({ ...scope, limit: 10 }, options);
-    expect(decodeFamilyCursor(initial.cursor)).toBe(created.record.sequence);
+    expect(initial.cursor).toBe(
+      Buffer.from(String(created.record.sequence), "utf8").toString("base64url"),
+    );
 
     expect(() =>
       mutateFamilyRecord(

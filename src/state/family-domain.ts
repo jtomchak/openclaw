@@ -89,11 +89,11 @@ function requestHash(kind: FamilyRecordKind, params: FamilyMutateParams): string
   return createHash("sha256").update(stableStringify({ kind, params })).digest("hex");
 }
 
-export function encodeFamilyCursor(sequence: number): string {
+function encodeFamilyCursor(sequence: number): string {
   return Buffer.from(String(sequence), "utf8").toString("base64url");
 }
 
-export function decodeFamilyCursor(cursor: string | undefined): number {
+function decodeFamilyCursor(cursor: string | undefined): number {
   if (!cursor) {
     return 0;
   }
